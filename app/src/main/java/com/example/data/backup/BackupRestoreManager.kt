@@ -2,10 +2,12 @@ package com.example.data.backup
 
 import android.content.Context
 import android.net.Uri
+import com.example.data.entity.AdditionalIncome
 import com.example.data.entity.ChildExpenseLog
 import com.example.data.entity.DailyGroceryLog
 import com.example.data.entity.ElectricityLog
 import com.example.data.entity.FuelLog
+import com.example.data.entity.MainSalaryConfig
 import com.example.data.entity.OilLog
 import com.example.data.entity.RandomExpense
 import com.example.data.entity.ServiceLog
@@ -47,10 +49,12 @@ class BackupRestoreManager(
         val warungDebts = trackerRepository.getAllWarungDebtsList()
         val warungDebtPayments = trackerRepository.getAllWarungDebtPaymentsList()
         val shoppingNoteItems = trackerRepository.getAllShoppingNoteItemsList()
+        val mainSalary = trackerRepository.getMainSalaryConfigDirect()
+        val additionalIncomes = trackerRepository.getAllAdditionalIncomesList()
 
         val rootJson = JSONObject()
         rootJson.put("app", "Dipta Home")
-        rootJson.put("version", 5)
+        rootJson.put("version", 6)
         rootJson.put("exportedAt", System.currentTimeMillis())
 
         // Vehicles
@@ -239,6 +243,34 @@ class BackupRestoreManager(
             shoppingArray.put(obj)
         }
         rootJson.put("shopping_note_items", shoppingArray)
+
+        // Main Salary Config
+        if (mainSalary != null) {
+            val msObj = JSONObject()
+            msObj.put("id", mainSalary.id)
+            msObj.put("nominal", mainSalary.nominal)
+            msObj.put("catatan", mainSalary.catatan)
+            msObj.put("updatedAt", mainSalary.updatedAt)
+            rootJson.put("main_salary_config", msObj)
+        }
+
+        // Additional Incomes
+        val incomeArray = JSONArray()
+        additionalIncomes.forEach { inc ->
+            val obj = JSONObject()
+            obj.put("id", inc.id)
+            obj.put("judul", inc.judul)
+            obj.put("kategori", inc.kategori)
+            obj.put("nominal", inc.nominal)
+            obj.put("tanggal", inc.tanggal)
+            obj.put("timestamp", inc.timestamp)
+            obj.put("isActive", inc.isActive)
+            obj.put("targetCycleOffset", inc.targetCycleOffset)
+            obj.put("targetCycleLabel", inc.targetCycleLabel)
+            obj.put("catatan", inc.catatan)
+            incomeArray.put(obj)
+        }
+        rootJson.put("additional_incomes", incomeArray)
 
         return rootJson.toString(2)
     }
@@ -521,21 +553,78 @@ class BackupRestoreManager(
                 }
             }
 
+            var mainSalaryConfig: MainSalaryConfig? = null
+            if (rootJson.has("main_salary_config")) {
+                val obj = rootJson.getJSONObject("main_salary_config")
+                mainSalaryConfig = MainSalaryConfig(
+                    id = obj.optInt("id", 1),
+                    nominal = obj.optDouble("nominal", 0.0),
+                    catatan = obj.optString("catatan", ""),
+                    updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                )
+            }
+
+            val additionalIncomeList = mutableListOf<AdditionalIncome>()
+            if (rootJson.has("additional_incomes")) {
+                val arr = rootJson.getJSONArray("additional_incomes")
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    additionalIncomeList.add(
+                        AdditionalIncome(
+                            id = obj.optInt("id", 0),
+                            judul = obj.optString("judul", "Penghasilan"),
+                            kategori = obj.optString("kategori", "Lemburan"),
+                            nominal = obj.optDouble("nominal", 0.0),
+                            tanggal = obj.optString("tanggal", ""),
+                            timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                            isActive = obj.optBoolean("isActive", true),
+                            targetCycleOffset = obj.optInt("targetCycleOffset", 0),
+                            targetCycleLabel = obj.optString("targetCycleLabel", ""),
+                            catatan = obj.optString("catatan", "")
+                        )
+                    )
+                }
+            }
+
             if (overwrite) {
                 trackerRepository.restoreAllLogs(
-                    vehicleList, fuelList, oilList, elecList, serviceList, socialList,
-                    groceryList, randomList, childList, debtList, paymentList, shoppingList
+                    vehicles = vehicleList,
+                    fuelLogs = fuelList,
+                    oilLogs = oilList,
+                    electricityLogs = elecList,
+                    serviceLogs = serviceList,
+                    socialLogs = socialList,
+                    dailyGroceryLogs = groceryList,
+                    randomExpenses = randomList,
+                    childExpenses = childList,
+                    warungDebts = debtList,
+                    warungDebtPayments = paymentList,
+                    shoppingNoteItems = shoppingList,
+                    mainSalaryConfig = mainSalaryConfig,
+                    additionalIncomes = additionalIncomeList
                 )
             } else {
                 trackerRepository.mergeAllLogs(
-                    vehicleList, fuelList, oilList, elecList, serviceList, socialList,
-                    groceryList, randomList, childList, debtList, paymentList, shoppingList
+                    vehicles = vehicleList,
+                    fuelLogs = fuelList,
+                    oilLogs = oilList,
+                    electricityLogs = elecList,
+                    serviceLogs = serviceList,
+                    socialLogs = socialList,
+                    dailyGroceryLogs = groceryList,
+                    randomExpenses = randomList,
+                    childExpenses = childList,
+                    warungDebts = debtList,
+                    warungDebtPayments = paymentList,
+                    shoppingNoteItems = shoppingList,
+                    mainSalaryConfig = mainSalaryConfig,
+                    additionalIncomes = additionalIncomeList
                 )
             }
 
             BackupResult(
                 success = true,
-                message = "Restorasi berhasil! Mengimpor ${vehicleList.size} Kendaraan, ${fuelList.size} Bensin, ${oilList.size} Oli, ${elecList.size} Listrik, ${serviceList.size} Servis, ${socialList.size} Jimpitan, ${groceryList.size} Belanja, ${debtList.size} Hutang Warung.",
+                message = "Restorasi berhasil! Mengimpor ${vehicleList.size} Kendaraan, ${fuelList.size} Bensin, ${oilList.size} Oli, ${elecList.size} Listrik, ${serviceList.size} Servis, ${socialList.size} Jimpitan, ${groceryList.size} Belanja, ${additionalIncomeList.size} Sumber Penghasilan Tambahan.",
                 vehicleCount = vehicleList.size,
                 fuelCount = fuelList.size,
                 oilCount = oilList.size,

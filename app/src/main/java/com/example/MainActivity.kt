@@ -22,6 +22,7 @@ import com.example.ui.hub.HubScreen
 import com.example.ui.jimpitan.JimpitanScreen
 import com.example.ui.listrik.ListrikScreen
 import com.example.ui.oli.OliScreen
+import com.example.ui.penghasilan.PenghasilanScreen
 import com.example.ui.resep.ResepScreen
 import com.example.ui.servis.ServisScreen
 import com.example.ui.warung.WarungScreen
@@ -58,6 +59,7 @@ object Routes {
     const val WARUNG = "warung"
     const val ANAK = "anak"
     const val RESEP = "resep"
+    const val PENGHASILAN = "penghasilan"
 }
 
 @Composable
@@ -75,6 +77,11 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
     val randomExpenses by viewModel.randomExpenses.collectAsStateWithLifecycle()
     val childExpenses by viewModel.childExpenses.collectAsStateWithLifecycle()
     val monthlyExpenseSummary by viewModel.monthlyExpenseSummary.collectAsStateWithLifecycle()
+    val mainSalaryConfig by viewModel.mainSalaryConfig.collectAsStateWithLifecycle()
+    val allAdditionalIncomes by viewModel.allAdditionalIncomes.collectAsStateWithLifecycle()
+    val financialCycleSummary by viewModel.financialCycleSummary.collectAsStateWithLifecycle()
+    val monthlyComparisonChartData by viewModel.monthlyComparisonChartData.collectAsStateWithLifecycle()
+    val yearlyComparisonChartData by viewModel.yearlyComparisonChartData.collectAsStateWithLifecycle()
     val warungDebts by viewModel.warungDebts.collectAsStateWithLifecycle()
     val warungDebtPayments by viewModel.warungDebtPayments.collectAsStateWithLifecycle()
     val shoppingNoteItems by viewModel.shoppingNoteItems.collectAsStateWithLifecycle()
@@ -109,6 +116,11 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 childExpenses = childExpenses,
                 warungDebts = warungDebts,
                 monthlyExpenseSummary = monthlyExpenseSummary,
+                financialSummary = financialCycleSummary,
+                mainSalaryConfig = mainSalaryConfig,
+                additionalIncomes = allAdditionalIncomes,
+                monthlyChartData = monthlyComparisonChartData,
+                yearlyChartData = yearlyComparisonChartData,
                 currentPaycheckPeriod = currentPaycheckPeriod,
                 syncStatus = syncStatus,
                 currentUser = currentUser,
@@ -119,6 +131,7 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 onNextPaycheckCycle = { viewModel.nextPaycheckCycle() },
                 onResetPaycheckCycle = { viewModel.resetPaycheckCycle() },
                 onUpdatePaycheckStartDay = { day -> viewModel.setPaycheckStartDay(day) },
+                onNavigateToPenghasilan = { navController.navigate(Routes.PENGHASILAN) },
                 onNavigateToBensin = { navController.navigate(Routes.BENSIN) },
                 onNavigateToOli = { navController.navigate(Routes.OLI) },
                 onNavigateToListrik = { navController.navigate(Routes.LISTRIK) },
@@ -214,6 +227,7 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 warungDebtPayments = warungDebtPayments,
                 shoppingNoteItems = shoppingNoteItems,
                 warungDebtLimit = warungDebtLimit,
+                remainingSalaryBudget = financialCycleSummary?.remainingBalance ?: 0.0,
                 currentPeriod = currentPaycheckPeriod,
                 onPrevPaycheckCycle = { viewModel.prevPaycheckCycle() },
                 onNextPaycheckCycle = { viewModel.nextPaycheckCycle() },
@@ -286,6 +300,46 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 onDeleteMealPlanItem = { id -> viewModel.deleteMealPlanItem(id) },
                 onClearMealPlanForDay = { day -> viewModel.clearMealPlanForDay(day) },
                 onExportWeeklyMealPlanToShoppingList = { viewModel.exportWeeklyMealPlanToShoppingList() },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.PENGHASILAN) {
+            PenghasilanScreen(
+                mainSalaryConfig = mainSalaryConfig,
+                additionalIncomes = allAdditionalIncomes,
+                financialSummary = financialCycleSummary,
+                currentPeriod = currentPaycheckPeriod,
+                monthlyChartData = monthlyComparisonChartData,
+                yearlyChartData = yearlyComparisonChartData,
+                onSetMainSalary = { nominal, catatan ->
+                    viewModel.setMainSalary(nominal, catatan)
+                },
+                onAddAdditionalIncome = { judul, kategori, nominal, tanggal, isActive, targetCycleOffset, targetCycleLabel, catatan ->
+                    viewModel.addAdditionalIncome(
+                        judul = judul,
+                        kategori = kategori,
+                        nominal = nominal,
+                        tanggal = tanggal,
+                        isActive = isActive,
+                        targetCycleOffset = targetCycleOffset,
+                        targetCycleLabel = targetCycleLabel,
+                        catatan = catatan
+                    )
+                },
+                onUpdateAdditionalIncome = { income ->
+                    viewModel.updateAdditionalIncome(income)
+                },
+                onToggleAdditionalIncome = { id, isActive, targetCycleOffset, targetCycleLabel ->
+                    viewModel.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel)
+                },
+                onDeleteAdditionalIncome = { id ->
+                    viewModel.deleteAdditionalIncome(id)
+                },
+                onPrevCycle = { viewModel.prevPaycheckCycle() },
+                onNextCycle = { viewModel.nextPaycheckCycle() },
+                onResetCycle = { viewModel.resetPaycheckCycle() },
+                onUpdatePaycheckStartDay = { day -> viewModel.setPaycheckStartDay(day) },
                 onNavigateBack = { navController.popBackStack() }
             )
         }

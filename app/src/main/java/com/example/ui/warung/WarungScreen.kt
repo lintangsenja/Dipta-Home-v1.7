@@ -147,6 +147,7 @@ fun WarungScreen(
     shoppingNoteItems: List<ShoppingNoteItem>,
     warungDebtLimit: Double,
     currentPeriod: PaycheckPeriod? = null,
+    remainingSalaryBudget: Double = 0.0,
     onPrevPaycheckCycle: () -> Unit = {},
     onNextPaycheckCycle: () -> Unit = {},
     onResetPaycheckCycle: () -> Unit = {},
@@ -528,6 +529,7 @@ fun WarungScreen(
             editingNoteItem = editingNoteItem,
             warungDebts = warungDebts,
             suggestedModal = (dailyGroceryLogs.firstOrNull()?.modalAwal ?: 50000.0),
+            remainingSalaryBudget = remainingSalaryBudget,
             onDismiss = {
                 showUniversalAddDialog = false
                 editingGroceryLog = null
@@ -2796,6 +2798,7 @@ fun UniversalWarungTransactionDialog(
     editingNoteItem: ShoppingNoteItem?,
     warungDebts: List<WarungDebt>,
     suggestedModal: Double,
+    remainingSalaryBudget: Double = 0.0,
     onDismiss: () -> Unit,
     onSaveGrocery: (tanggal: String, modal: Double, sisa: Double, rincian: String, catatan: String) -> Unit,
     onSaveRandom: (tanggal: String, modal: Double, sisa: Double, rincian: String, catatan: String) -> Unit,
@@ -2950,6 +2953,65 @@ fun UniversalWarungTransactionDialog(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 TextButton(onClick = { modalStr = suggestedModal.toInt().toString() }) {
                                     Text("Isi Modal", fontSize = 11.sp, color = SageGreenPrimary)
+                                }
+                            }
+                        }
+
+                        // Modal Belanja Deficit Warning Alert
+                        if (remainingSalaryBudget != 0.0 || modalVal > 0) {
+                            val isExceeding = modalVal > remainingSalaryBudget
+                            if (isExceeding && remainingSalaryBudget > 0) {
+                                val deficitAmount = modalVal - remainingSalaryBudget
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFFFEBEE),
+                                    border = BorderStroke(1.dp, Color(0xFFFFCDD2)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = Color(0xFFD32F2F),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "⚠️ Modal melebihi sisa anggaran: Defisit -${Formatters.formatRupiah(deficitAmount)}",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFD32F2F)
+                                        )
+                                    }
+                                }
+                            } else if (remainingSalaryBudget < 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFFFEBEE),
+                                    border = BorderStroke(1.dp, Color(0xFFFFCDD2)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = Color(0xFFD32F2F),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "⚠️ Keuangan saat ini sedang defisit (${Formatters.formatRupiah(remainingSalaryBudget)})",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFD32F2F)
+                                        )
+                                    }
                                 }
                             }
                         }

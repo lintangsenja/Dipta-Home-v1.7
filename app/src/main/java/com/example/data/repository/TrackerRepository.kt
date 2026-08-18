@@ -2,16 +2,19 @@ package com.example.data.repository
 
 import com.example.data.dao.ElectricityDao
 import com.example.data.dao.FuelDao
+import com.example.data.dao.IncomeDao
 import com.example.data.dao.OilDao
 import com.example.data.dao.RecipeDao
 import com.example.data.dao.ServiceDao
 import com.example.data.dao.SocialDao
 import com.example.data.dao.VehicleDao
 import com.example.data.dao.WarungDao
+import com.example.data.entity.AdditionalIncome
 import com.example.data.entity.ChildExpenseLog
 import com.example.data.entity.DailyGroceryLog
 import com.example.data.entity.ElectricityLog
 import com.example.data.entity.FuelLog
+import com.example.data.entity.MainSalaryConfig
 import com.example.data.entity.MealPlanItem
 import com.example.data.entity.OilLog
 import com.example.data.entity.RandomExpense
@@ -36,7 +39,8 @@ class TrackerRepository(
     private val serviceDao: ServiceDao,
     private val socialDao: SocialDao,
     private val warungDao: WarungDao,
-    private val recipeDao: RecipeDao
+    private val recipeDao: RecipeDao,
+    private val incomeDao: IncomeDao
 ) {
     // Flows for reactive UI updates
     val allVehicles: Flow<List<Vehicle>> = vehicleDao.getAllVehicles()
@@ -57,6 +61,9 @@ class TrackerRepository(
     val activeRecipes: Flow<List<Recipe>> = recipeDao.getAllActiveRecipes()
     val deletedRecipes: Flow<List<Recipe>> = recipeDao.getDeletedRecipes()
     val mealPlanItems: Flow<List<MealPlanItem>> = recipeDao.getAllMealPlanItems()
+
+    val mainSalaryConfig: Flow<MainSalaryConfig?> = incomeDao.getMainSalaryConfig()
+    val allAdditionalIncomes: Flow<List<AdditionalIncome>> = incomeDao.getAllAdditionalIncomes()
 
     // --- VEHICLE LOGIC ---
     suspend fun getAllVehiclesList(): List<Vehicle> = withContext(Dispatchers.IO) {
@@ -625,6 +632,71 @@ class TrackerRepository(
     suspend fun getAllSocialLogsList(): List<SocialLog> = socialDao.getAllLogsList()
     suspend fun getAllRecipesList(): List<Recipe> = recipeDao.getAllActiveRecipesList()
     suspend fun getAllMealPlanItemsList(): List<MealPlanItem> = recipeDao.getAllMealPlanItemsList()
+    suspend fun getMainSalaryConfigDirect(): MainSalaryConfig? = incomeDao.getMainSalaryConfigDirect()
+    suspend fun getAllAdditionalIncomesList(): List<AdditionalIncome> = incomeDao.getAllAdditionalIncomesList()
+
+    // --- INCOME SOURCES METHODS ---
+    suspend fun setMainSalary(nominal: Double, catatan: String = "") = withContext(Dispatchers.IO) {
+        val config = MainSalaryConfig(
+            id = 1,
+            nominal = nominal.coerceAtLeast(0.0),
+            catatan = catatan,
+            updatedAt = System.currentTimeMillis()
+        )
+        incomeDao.insertMainSalaryConfig(config)
+    }
+
+    suspend fun addAdditionalIncome(
+        judul: String,
+        kategori: String,
+        nominal: Double,
+        tanggal: String,
+        isActive: Boolean = true,
+        targetCycleOffset: Int = 0,
+        targetCycleLabel: String = "",
+        catatan: String = ""
+    ): Long = withContext(Dispatchers.IO) {
+        val income = AdditionalIncome(
+            judul = judul,
+            kategori = kategori,
+            nominal = nominal.coerceAtLeast(0.0),
+            tanggal = tanggal,
+            timestamp = System.currentTimeMillis(),
+            isActive = isActive,
+            targetCycleOffset = targetCycleOffset,
+            targetCycleLabel = targetCycleLabel,
+            catatan = catatan
+        )
+        incomeDao.insertAdditionalIncome(income)
+    }
+
+    suspend fun updateAdditionalIncome(income: AdditionalIncome) = withContext(Dispatchers.IO) {
+        incomeDao.updateAdditionalIncome(income)
+    }
+
+    suspend fun toggleAdditionalIncome(
+        id: Int,
+        isActive: Boolean,
+        targetCycleOffset: Int = 0,
+        targetCycleLabel: String = ""
+    ) = withContext(Dispatchers.IO) {
+        val item = incomeDao.getAdditionalIncomeById(id) ?: return@withContext
+        val updated = item.copy(
+            isActive = isActive,
+            targetCycleOffset = if (isActive) targetCycleOffset else item.targetCycleOffset,
+            targetCycleLabel = if (isActive && targetCycleLabel.isNotBlank()) targetCycleLabel else item.targetCycleLabel
+        )
+        incomeDao.updateAdditionalIncome(updated)
+    }
+
+    suspend fun deleteAdditionalIncome(id: Int) = withContext(Dispatchers.IO) {
+        incomeDao.deleteAdditionalIncomeById(id)
+    }
+
+    suspend fun clearAllIncomes() = withContext(Dispatchers.IO) {
+        incomeDao.clearMainSalaryConfig()
+        incomeDao.clearAllAdditionalIncomes()
+    }
 
     suspend fun restoreAllLogs(
         vehicles: List<Vehicle>,
@@ -638,7 +710,11 @@ class TrackerRepository(
         childExpenses: List<ChildExpenseLog> = emptyList(),
         warungDebts: List<WarungDebt> = emptyList(),
         warungDebtPayments: List<WarungDebtPayment> = emptyList(),
-        shoppingNoteItems: List<ShoppingNoteItem> = emptyList()
+        shoppingNoteItems: List<ShoppingNoteItem> = emptyList(),
+        recipes: List<Recipe> = emptyList(),
+        mealPlanItems: List<MealPlanItem> = emptyList(),
+        mainSalaryConfig: MainSalaryConfig? = null,
+        additionalIncomes: List<AdditionalIncome> = emptyList()
     ) {
         vehicleDao.clearAll()
         fuelDao.clearAll()
@@ -652,6 +728,10 @@ class TrackerRepository(
         warungDao.deleteAllWarungDebts()
         warungDao.deleteAllWarungDebtPayments()
         warungDao.deleteAllShoppingNoteItems()
+        recipeDao.clearAllRecipes()
+        recipeDao.clearAllMealPlans()
+        incomeDao.clearMainSalaryConfig()
+        incomeDao.clearAllAdditionalIncomes()
 
         if (vehicles.isNotEmpty()) {
             vehicleDao.insertAll(vehicles)
@@ -671,6 +751,14 @@ class TrackerRepository(
         warungDebts.forEach { warungDao.insertWarungDebt(it) }
         warungDebtPayments.forEach { warungDao.insertWarungDebtPayment(it) }
         shoppingNoteItems.forEach { warungDao.insertShoppingNoteItem(it) }
+        recipes.forEach { recipeDao.insertRecipe(it) }
+        mealPlanItems.forEach { recipeDao.insertMealPlanItem(it) }
+        if (mainSalaryConfig != null) {
+            incomeDao.insertMainSalaryConfig(mainSalaryConfig)
+        }
+        if (additionalIncomes.isNotEmpty()) {
+            incomeDao.insertAllAdditionalIncomes(additionalIncomes)
+        }
     }
 
     suspend fun mergeAllLogs(
@@ -687,7 +775,9 @@ class TrackerRepository(
         warungDebtPayments: List<WarungDebtPayment> = emptyList(),
         shoppingNoteItems: List<ShoppingNoteItem> = emptyList(),
         recipes: List<Recipe> = emptyList(),
-        mealPlanItems: List<MealPlanItem> = emptyList()
+        mealPlanItems: List<MealPlanItem> = emptyList(),
+        mainSalaryConfig: MainSalaryConfig? = null,
+        additionalIncomes: List<AdditionalIncome> = emptyList()
     ) {
         if (vehicles.isNotEmpty()) {
             vehicleDao.insertAll(vehicles)
@@ -709,6 +799,12 @@ class TrackerRepository(
         shoppingNoteItems.forEach { warungDao.insertShoppingNoteItem(it) }
         recipes.forEach { recipeDao.insertRecipe(it) }
         mealPlanItems.forEach { recipeDao.insertMealPlanItem(it) }
+        if (mainSalaryConfig != null) {
+            incomeDao.insertMainSalaryConfig(mainSalaryConfig)
+        }
+        if (additionalIncomes.isNotEmpty()) {
+            incomeDao.insertAllAdditionalIncomes(additionalIncomes)
+        }
     }
 
     // --- RECIPE & MEAL PLAN METHODS ---

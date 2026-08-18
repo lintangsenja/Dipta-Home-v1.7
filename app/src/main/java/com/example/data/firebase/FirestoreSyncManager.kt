@@ -2,10 +2,12 @@ package com.example.data.firebase
 
 import android.content.Context
 import android.util.Log
+import com.example.data.entity.AdditionalIncome
 import com.example.data.entity.ChildExpenseLog
 import com.example.data.entity.DailyGroceryLog
 import com.example.data.entity.ElectricityLog
 import com.example.data.entity.FuelLog
+import com.example.data.entity.MainSalaryConfig
 import com.example.data.entity.MealPlanItem
 import com.example.data.entity.OilLog
 import com.example.data.entity.RandomExpense
@@ -153,6 +155,8 @@ class FirestoreSyncManager(
             val shoppingItems = trackerRepository.getAllShoppingNoteItemsList()
             val recipes = trackerRepository.getAllRecipesList()
             val mealPlanItems = trackerRepository.getAllMealPlanItemsList()
+            val mainSalary = trackerRepository.getMainSalaryConfigDirect()
+            val additionalIncomes = trackerRepository.getAllAdditionalIncomesList()
 
             val ops = mutableListOf<Pair<DocumentReference, Map<String, Any?>>>()
 
@@ -397,13 +401,45 @@ class FirestoreSyncManager(
                 ops.add(topRef to data)
             }
 
+            // 12. Sync Main Salary Config
+            if (mainSalary != null) {
+                val topRef = fs.collection("main_salary_config").document("primary")
+                val data = mapOf(
+                    "id" to mainSalary.id,
+                    "nominal" to mainSalary.nominal,
+                    "catatan" to mainSalary.catatan,
+                    "updatedAt" to mainSalary.updatedAt
+                )
+                ops.add(topRef to data)
+            }
+
+            // 13. Sync Additional Incomes
+            additionalIncomes.forEach { inc ->
+                val topRef = fs.collection("additional_incomes").document(inc.id.toString())
+                val data = mapOf(
+                    "id" to inc.id,
+                    "judul" to inc.judul,
+                    "kategori" to inc.kategori,
+                    "nominal" to inc.nominal,
+                    "tanggal" to inc.tanggal,
+                    "timestamp" to inc.timestamp,
+                    "isActive" to inc.isActive,
+                    "targetCycleOffset" to inc.targetCycleOffset,
+                    "targetCycleLabel" to inc.targetCycleLabel,
+                    "catatan" to inc.catatan,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+                ops.add(topRef to data)
+            }
+
             commitBatchedWrites(fs, ops)
 
             val totalUploaded = vehicles.size + fuelLogs.size + oilLogs.size +
                     electricityLogs.size + serviceLogs.size + socialLogs.size +
                     groceryLogs.size + randomExpenses.size + childExpenses.size +
                     warungDebts.size + debtPayments.size + shoppingItems.size +
-                    recipes.size + mealPlanItems.size
+                    recipes.size + mealPlanItems.size + (if (mainSalary != null) 1 else 0) +
+                    additionalIncomes.size
 
             val now = System.currentTimeMillis()
             saveLastSyncTime(now)
@@ -770,17 +806,72 @@ class FirestoreSyncManager(
                 )
             }
 
+            var downloadedSalaryConfig: MainSalaryConfig? = null
+            try {
+                val salaryDoc = fs.collection("main_salary_config").document("primary").get().await()
+                if (salaryDoc.exists()) {
+                    downloadedSalaryConfig = MainSalaryConfig(
+                        id = salaryDoc.getSafeInt("id", default = 1),
+                        nominal = salaryDoc.getSafeDouble("nominal", default = 0.0),
+                        catatan = salaryDoc.getSafeString("catatan", default = ""),
+                        updatedAt = salaryDoc.getSafeLong("updatedAt", default = System.currentTimeMillis())
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w("FirestoreSyncManager", "Could not fetch main_salary_config: ${e.message}")
+            }
+
+            val additionalIncomeList = safeFetchCollection(fs, "additional_incomes", idSelector = { it.id }) { doc ->
+                val defaultId = doc.id.toIntOrNull() ?: (doc.id.hashCode() and 0x7FFFFFFF)
+                val id = doc.getSafeInt("id", default = defaultId)
+                val judul = doc.getSafeString("judul", "nama", default = "Penghasilan")
+                val kategori = doc.getSafeString("kategori", default = "Lemburan")
+                val nominal = doc.getSafeDouble("nominal", "total", default = 0.0)
+                val tanggal = doc.getSafeString("tanggal", "date", default = "")
+                val timestamp = doc.getSafeLong("timestamp", default = System.currentTimeMillis())
+                val isActive = doc.getSafeBoolean("isActive", "active", default = true)
+                val targetCycleOffset = doc.getSafeInt("targetCycleOffset", default = 0)
+                val targetCycleLabel = doc.getSafeString("targetCycleLabel", default = "")
+                val catatan = doc.getSafeString("catatan", default = "")
+                AdditionalIncome(
+                    id = id,
+                    judul = judul,
+                    kategori = kategori,
+                    nominal = nominal,
+                    tanggal = tanggal,
+                    timestamp = timestamp,
+                    isActive = isActive,
+                    targetCycleOffset = targetCycleOffset,
+                    targetCycleLabel = targetCycleLabel,
+                    catatan = catatan
+                )
+            }
+
             val totalDownloaded = vehicleList.size + fuelList.size + oilList.size +
                     elecList.size + serviceList.size + socialList.size +
                     groceryList.size + randomList.size + childList.size + debtList.size + paymentList.size + shoppingList.size +
-                    recipeList.size + mealPlanList.size
+                    recipeList.size + mealPlanList.size + (if (downloadedSalaryConfig != null) 1 else 0) +
+                    additionalIncomeList.size
 
             val now = System.currentTimeMillis()
             if (totalDownloaded > 0) {
                 trackerRepository.mergeAllLogs(
-                    vehicleList, fuelList, oilList, elecList, serviceList, socialList,
-                    groceryList, randomList, childList, debtList, paymentList, shoppingList,
-                    recipeList, mealPlanList
+                    vehicles = vehicleList,
+                    fuelLogs = fuelList,
+                    oilLogs = oilList,
+                    electricityLogs = elecList,
+                    serviceLogs = serviceList,
+                    socialLogs = socialList,
+                    dailyGroceryLogs = groceryList,
+                    randomExpenses = randomList,
+                    childExpenses = childList,
+                    warungDebts = debtList,
+                    warungDebtPayments = paymentList,
+                    shoppingNoteItems = shoppingList,
+                    recipes = recipeList,
+                    mealPlanItems = mealPlanList,
+                    mainSalaryConfig = downloadedSalaryConfig,
+                    additionalIncomes = additionalIncomeList
                 )
                 saveLastSyncTime(now)
 

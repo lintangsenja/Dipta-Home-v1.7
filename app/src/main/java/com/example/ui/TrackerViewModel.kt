@@ -8,10 +8,12 @@ import android.content.Context
 import com.example.data.backup.BackupRestoreManager
 import com.example.data.backup.BackupResult
 import com.example.data.database.AppDatabase
+import com.example.data.entity.AdditionalIncome
 import com.example.data.entity.ChildExpenseLog
 import com.example.data.entity.DailyGroceryLog
 import com.example.data.entity.ElectricityLog
 import com.example.data.entity.FuelLog
+import com.example.data.entity.MainSalaryConfig
 import com.example.data.entity.OilLog
 import com.example.data.entity.RandomExpense
 import com.example.data.entity.ServiceLog
@@ -28,6 +30,7 @@ import com.example.ui.util.PaycheckPeriod
 import com.google.firebase.auth.FirebaseUser
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,6 +51,24 @@ data class MonthlyExpenseSummary(
     val grandTotal: Double = 0.0
 )
 
+data class FinancialCycleSummary(
+    val mainSalary: Double = 0.0,
+    val additionalIncomeTotal: Double = 0.0,
+    val totalIncome: Double = 0.0,
+    val totalExpense: Double = 0.0,
+    val remainingBalance: Double = 0.0,
+    val isDeficit: Boolean = false,
+    val expensePercentage: Float = 0f,
+    val activeAdditionalIncomes: List<AdditionalIncome> = emptyList()
+)
+
+data class BarChartItem(
+    val label: String,
+    val income: Double,
+    val expense: Double,
+    val net: Double
+)
+
 class TrackerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
@@ -59,7 +80,8 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         serviceDao = db.serviceDao(),
         socialDao = db.socialDao(),
         warungDao = db.warungDao(),
-        recipeDao = db.recipeDao()
+        recipeDao = db.recipeDao(),
+        incomeDao = db.incomeDao()
     )
 
     private val prefs = application.getSharedPreferences("dipta_warung_prefs", Context.MODE_PRIVATE)
@@ -267,6 +289,217 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = MonthlyExpenseSummary()
     )
+
+    // Income Flows
+    val mainSalaryConfig: StateFlow<MainSalaryConfig?> = repository.mainSalaryConfig
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val allAdditionalIncomes: StateFlow<List<AdditionalIncome>> = repository.allAdditionalIncomes
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Financial Cycle Summary (Main Salary + Active Additional Incomes - Expenses)
+    val financialCycleSummary: StateFlow<FinancialCycleSummary> = combine(
+        mainSalaryConfig,
+        allAdditionalIncomes,
+        monthlyExpenseSummary,
+        currentPaycheckPeriod,
+        _paycheckCycleOffset
+    ) { salary, additions, expenseSummary, period, offset ->
+        val baseSalary = salary?.nominal ?: 0.0
+        
+        // Filter additional incomes allocated to this cycle
+        val activeAdditions = additions.filter { inc ->
+            if (!inc.isActive) return@filter false
+            if (inc.targetCycleOffset == offset) return@filter true
+            if (inc.targetCycleLabel.isNotBlank() && inc.targetCycleLabel == period.label) return@filter true
+            // If cycle offset not explicitly locked, match period date
+            inc.targetCycleOffset == 0 && offset == 0 || period.contains(inc.timestamp, inc.tanggal)
+        }
+
+        val additionTotal = activeAdditions.sumOf { it.nominal }
+        val totalIncome = baseSalary + additionTotal
+        val totalExpense = expenseSummary.grandTotal
+        val remaining = totalIncome - totalExpense
+        val isDeficit = remaining < 0
+        val percentage = when {
+            totalIncome > 0 -> (totalExpense / totalIncome).toFloat().coerceIn(0f, 2.5f)
+            totalExpense > 0 -> 1f
+            else -> 0f
+        }
+
+        FinancialCycleSummary(
+            mainSalary = baseSalary,
+            additionalIncomeTotal = additionTotal,
+            totalIncome = totalIncome,
+            totalExpense = totalExpense,
+            remainingBalance = remaining,
+            isDeficit = isDeficit,
+            expensePercentage = percentage,
+            activeAdditionalIncomes = activeAdditions
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = FinancialCycleSummary()
+    )
+
+    // Grouped Bar Chart Data (Monthly - Last 6 Cycles)
+    val monthlyComparisonData: StateFlow<List<BarChartItem>> = combine(
+        mainSalaryConfig,
+        allAdditionalIncomes,
+        dailyGroceryLogs,
+        randomExpenses,
+        childExpenses,
+        fuelLogs,
+        oilLogs,
+        serviceLogs,
+        electricityLogs,
+        _paycheckStartDay
+    ) { flows ->
+        val salary = flows[0] as? MainSalaryConfig
+        @Suppress("UNCHECKED_CAST")
+        val additions = flows[1] as List<AdditionalIncome>
+        @Suppress("UNCHECKED_CAST")
+        val grocery = flows[2] as List<DailyGroceryLog>
+        @Suppress("UNCHECKED_CAST")
+        val random = flows[3] as List<RandomExpense>
+        @Suppress("UNCHECKED_CAST")
+        val child = flows[4] as List<ChildExpenseLog>
+        @Suppress("UNCHECKED_CAST")
+        val fuel = flows[5] as List<FuelLog>
+        @Suppress("UNCHECKED_CAST")
+        val oil = flows[6] as List<OilLog>
+        @Suppress("UNCHECKED_CAST")
+        val service = flows[7] as List<ServiceLog>
+        @Suppress("UNCHECKED_CAST")
+        val electricity = flows[8] as List<ElectricityLog>
+        val startDay = flows[9] as Int
+
+        val baseSalary = salary?.nominal ?: 0.0
+        val list = mutableListOf<BarChartItem>()
+
+        // Generate last 6 cycles (-5 to 0)
+        val sdfShortLabel = SimpleDateFormat("MMM ''yy", Locale("id", "ID"))
+        for (offset in -5..0) {
+            val period = PaycheckCycleHelper.calculatePeriod(startDay = startDay, offset = offset)
+            val periodAdditions = additions.filter { inc ->
+                inc.isActive && (inc.targetCycleOffset == offset || period.contains(inc.timestamp, inc.tanggal))
+            }.sumOf { it.nominal }
+
+            val incTotal = baseSalary + periodAdditions
+
+            val sumBelanja = grocery.filter { period.contains(it.timestamp, it.tanggal) }
+                .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+            val sumRandom = random.filter { period.contains(it.timestamp, it.tanggal) }
+                .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+            val sumAnak = child.filter { period.contains(it.timestamp, it.tanggal) }
+                .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+            val sumBensin = fuel.filter { period.contains(timestamp = it.tanggal) }.sumOf { it.nominal.toDouble() }
+            val sumOli = oil.filter { period.contains(timestamp = it.tanggal) }.sumOf { it.harga.toDouble() }
+            val sumServis = service.filter { period.contains(timestamp = it.tanggal) }.sumOf { it.total_biaya.toDouble() }
+            val sumListrik = electricity.filter { period.contains(timestamp = it.tanggal) }.sumOf { it.harga.toDouble() }
+
+            val expTotal = sumBelanja + sumRandom + sumAnak + sumBensin + sumOli + sumServis + sumListrik
+
+            val label = sdfShortLabel.format(Date(period.startTimestamp))
+            list.add(
+                BarChartItem(
+                    label = label,
+                    income = incTotal,
+                    expense = expTotal,
+                    net = incTotal - expTotal
+                )
+            )
+        }
+        list
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val monthlyComparisonChartData: StateFlow<List<BarChartItem>> = monthlyComparisonData
+
+    // Grouped Bar Chart Data (Yearly - Last 3 Years)
+    val yearlyComparisonData: StateFlow<List<BarChartItem>> = combine(
+        mainSalaryConfig,
+        allAdditionalIncomes,
+        dailyGroceryLogs,
+        randomExpenses,
+        childExpenses,
+        fuelLogs,
+        oilLogs,
+        serviceLogs,
+        electricityLogs
+    ) { flows ->
+        val salary = flows[0] as? MainSalaryConfig
+        @Suppress("UNCHECKED_CAST")
+        val additions = flows[1] as List<AdditionalIncome>
+        @Suppress("UNCHECKED_CAST")
+        val grocery = flows[2] as List<DailyGroceryLog>
+        @Suppress("UNCHECKED_CAST")
+        val random = flows[3] as List<RandomExpense>
+        @Suppress("UNCHECKED_CAST")
+        val child = flows[4] as List<ChildExpenseLog>
+        @Suppress("UNCHECKED_CAST")
+        val fuel = flows[5] as List<FuelLog>
+        @Suppress("UNCHECKED_CAST")
+        val oil = flows[6] as List<OilLog>
+        @Suppress("UNCHECKED_CAST")
+        val service = flows[7] as List<ServiceLog>
+        @Suppress("UNCHECKED_CAST")
+        val electricity = flows[8] as List<ElectricityLog>
+
+        val baseSalaryPerYear = (salary?.nominal ?: 0.0) * 12
+        val currentCalYear = Calendar.getInstance().get(Calendar.YEAR)
+        val list = mutableListOf<BarChartItem>()
+        val sdfYear = SimpleDateFormat("yyyy", Locale.getDefault())
+
+        for (year in (currentCalYear - 2)..currentCalYear) {
+            val yearStr = year.toString()
+
+            val yearAdditions = additions.filter { inc ->
+                inc.isActive && (inc.tanggal.startsWith(yearStr) || (inc.tanggal.isBlank() && sdfYear.format(Date(inc.timestamp)) == yearStr))
+            }.sumOf { it.nominal }
+
+            val incTotal = baseSalaryPerYear + yearAdditions
+
+            val sumBelanja = grocery.filter { it.tanggal.startsWith(yearStr) }
+                .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+            val sumRandom = random.filter { it.tanggal.startsWith(yearStr) }
+                .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+            val sumAnak = child.filter { it.tanggal.startsWith(yearStr) }
+                .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+            val sumBensin = fuel.filter { sdfYear.format(Date(it.tanggal)) == yearStr }.sumOf { it.nominal.toDouble() }
+            val sumOli = oil.filter { sdfYear.format(Date(it.tanggal)) == yearStr }.sumOf { it.harga.toDouble() }
+            val sumServis = service.filter { sdfYear.format(Date(it.tanggal)) == yearStr }.sumOf { it.total_biaya.toDouble() }
+            val sumListrik = electricity.filter { sdfYear.format(Date(it.tanggal)) == yearStr }.sumOf { it.harga.toDouble() }
+
+            val expTotal = sumBelanja + sumRandom + sumAnak + sumBensin + sumOli + sumServis + sumListrik
+
+            list.add(
+                BarChartItem(
+                    label = yearStr,
+                    income = incTotal,
+                    expense = expTotal,
+                    net = incTotal - expTotal
+                )
+            )
+        }
+        list
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val yearlyComparisonChartData: StateFlow<List<BarChartItem>> = yearlyComparisonData
 
     // Paycheck Cycle Actions
     fun setPaycheckStartDay(day: Int) {
@@ -871,9 +1104,69 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // --- INCOME SOURCES ACTIONS ---
+    fun setMainSalary(nominal: Double, catatan: String = "") {
+        viewModelScope.launch {
+            repository.setMainSalary(nominal, catatan)
+            autoSyncToCloud()
+        }
+    }
+
+    fun addAdditionalIncome(
+        judul: String,
+        kategori: String,
+        nominal: Double,
+        tanggal: String,
+        isActive: Boolean = true,
+        targetCycleOffset: Int = 0,
+        targetCycleLabel: String = "",
+        catatan: String = ""
+    ) {
+        viewModelScope.launch {
+            repository.addAdditionalIncome(
+                judul = judul,
+                kategori = kategori,
+                nominal = nominal,
+                tanggal = tanggal,
+                isActive = isActive,
+                targetCycleOffset = targetCycleOffset,
+                targetCycleLabel = targetCycleLabel,
+                catatan = catatan
+            )
+            autoSyncToCloud()
+        }
+    }
+
+    fun updateAdditionalIncome(income: AdditionalIncome) {
+        viewModelScope.launch {
+            repository.updateAdditionalIncome(income)
+            autoSyncToCloud()
+        }
+    }
+
+    fun toggleAdditionalIncome(
+        id: Int,
+        isActive: Boolean,
+        targetCycleOffset: Int = 0,
+        targetCycleLabel: String = ""
+    ) {
+        viewModelScope.launch {
+            repository.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel)
+            autoSyncToCloud()
+        }
+    }
+
+    fun deleteAdditionalIncome(id: Int) {
+        viewModelScope.launch {
+            repository.deleteAdditionalIncome(id)
+            autoSyncToCloud()
+        }
+    }
+
     fun resetAllMasterData(onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             repository.clearAllLocalData()
+            repository.clearAllIncomes()
             _activeVehicleId.value = 0
             onSuccess()
         }

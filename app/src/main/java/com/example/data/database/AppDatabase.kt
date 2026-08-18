@@ -6,16 +6,19 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.data.dao.ElectricityDao
 import com.example.data.dao.FuelDao
+import com.example.data.dao.IncomeDao
 import com.example.data.dao.OilDao
 import com.example.data.dao.RecipeDao
 import com.example.data.dao.ServiceDao
 import com.example.data.dao.SocialDao
 import com.example.data.dao.VehicleDao
 import com.example.data.dao.WarungDao
+import com.example.data.entity.AdditionalIncome
 import com.example.data.entity.ChildExpenseLog
 import com.example.data.entity.DailyGroceryLog
 import com.example.data.entity.ElectricityLog
 import com.example.data.entity.FuelLog
+import com.example.data.entity.MainSalaryConfig
 import com.example.data.entity.MealPlanItem
 import com.example.data.entity.OilLog
 import com.example.data.entity.RandomExpense
@@ -42,9 +45,11 @@ import com.example.data.entity.WarungDebtPayment
         WarungDebtPayment::class,
         ShoppingNoteItem::class,
         Recipe::class,
-        MealPlanItem::class
+        MealPlanItem::class,
+        MainSalaryConfig::class,
+        AdditionalIncome::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -56,6 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun socialDao(): SocialDao
     abstract fun warungDao(): WarungDao
     abstract fun recipeDao(): RecipeDao
+    abstract fun incomeDao(): IncomeDao
 
     companion object {
         @Volatile

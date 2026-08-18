@@ -40,8 +40,15 @@ import com.example.ui.theme.SoftTextMuted
 import com.example.ui.theme.SoftCreamCanvas
 import com.example.ui.theme.SageGreenPrimaryContainer
 import com.example.ui.common.DateRangeFilterDialog
+import com.example.data.entity.AdditionalIncome
+import com.example.data.entity.MainSalaryConfig
+import com.example.ui.BarChartItem
+import com.example.ui.FinancialCycleSummary
+import com.example.ui.penghasilan.FinancialCycleStatusCard
+import com.example.ui.penghasilan.GroupedBarChartSection
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
@@ -236,6 +243,11 @@ fun HubScreen(
     childExpenses: List<ChildExpenseLog> = emptyList(),
     warungDebts: List<WarungDebt> = emptyList(),
     monthlyExpenseSummary: MonthlyExpenseSummary? = null,
+    financialSummary: FinancialCycleSummary? = null,
+    mainSalaryConfig: MainSalaryConfig? = null,
+    additionalIncomes: List<AdditionalIncome> = emptyList(),
+    monthlyChartData: List<BarChartItem> = emptyList(),
+    yearlyChartData: List<BarChartItem> = emptyList(),
     currentPaycheckPeriod: PaycheckPeriod? = null,
     syncStatus: SyncStatus,
     currentUser: FirebaseUser?,
@@ -246,6 +258,7 @@ fun HubScreen(
     onNextPaycheckCycle: () -> Unit = {},
     onResetPaycheckCycle: () -> Unit = {},
     onUpdatePaycheckStartDay: (Int) -> Unit = {},
+    onNavigateToPenghasilan: () -> Unit = {},
     onNavigateToBensin: () -> Unit,
     onNavigateToOli: () -> Unit,
     onNavigateToListrik: () -> Unit,
@@ -883,6 +896,72 @@ fun HubScreen(
                         }
                     }
 
+                    // Section 3b: Sumber Penghasilan
+                    item {
+                        Text(
+                            text = "SUMBER PENGHASILAN",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = SageGreenPrimary,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, SageGreenPrimaryContainer),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToPenghasilan()
+                                }
+                                .testTag("btn_penghasilan_drawer")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(SageGreenPrimary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        tint = SageGreenPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Sumber Penghasilan",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Gaji pokok & penghasilan tambahan",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = SageGreenPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
                     // Section 4: Pengaturan Siklus Gaji
                     item {
                         Text(
@@ -1471,6 +1550,39 @@ fun HubScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
 
+                            // Status Keuangan & Sisa Gaji Card (Surplus / Deficit Indicator)
+                            val activeFinancialSummary = financialSummary ?: remember(mainSalaryConfig, additionalIncomes, grandTotal) {
+                                val baseSalary = mainSalaryConfig?.nominal ?: 0.0
+                                val activeAdd = additionalIncomes.filter { it.isActive }.sumOf { it.nominal }
+                                val totalInc = baseSalary + activeAdd
+                                val rem = totalInc - grandTotal
+                                FinancialCycleSummary(
+                                    mainSalary = baseSalary,
+                                    additionalIncomeTotal = activeAdd,
+                                    totalIncome = totalInc,
+                                    totalExpense = grandTotal,
+                                    remainingBalance = rem,
+                                    isDeficit = rem < 0,
+                                    expensePercentage = if (totalInc > 0) (grandTotal / totalInc).toFloat() else 0f
+                                )
+                            }
+                            FinancialCycleStatusCard(
+                                financialSummary = activeFinancialSummary,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            // Grouped Bar Chart Section (Perbandingan Pendapatan vs Pengeluaran)
+                            if (monthlyChartData.isNotEmpty() || yearlyChartData.isNotEmpty()) {
+                                var hubChartMode by remember { mutableStateOf("monthly") }
+                                GroupedBarChartSection(
+                                    chartMode = hubChartMode,
+                                    monthlyChartData = monthlyChartData,
+                                    yearlyChartData = yearlyChartData,
+                                    onChangeChartMode = { hubChartMode = it },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
                             Card(
                                 shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(
@@ -1690,6 +1802,28 @@ fun HubScreen(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.padding(start = 20.dp, top = 4.dp, end = 20.dp)
+                        )
+                    }
+
+                    // 4a. Module 0: Sumber Penghasilan (Gaji Pokok & Penghasilan Tambahan)
+                    item {
+                        val activeIncomeCount = additionalIncomes.count { it.isActive }
+                        val salarySubtitle = if (mainSalaryConfig != null && mainSalaryConfig.nominal > 0) {
+                            "Gaji Pokok: ${Formatters.formatRupiah(mainSalaryConfig.nominal)} • $activeIncomeCount Pemasukan Tambahan Aktif"
+                        } else {
+                            "Atur gaji pokok bulanan & catat pemasukan tambahan / uang kaget"
+                        }
+
+                        ModuleCard(
+                            title = "Sumber Penghasilan",
+                            subtitle = salarySubtitle,
+                            badgeText = "Gaji Pokok, Lemburan & Uang Kaget",
+                            icon = Icons.Default.AccountBalanceWallet,
+                            cardBackgroundColor = SageGreenPrimaryContainer,
+                            iconColor = SageGreenPrimary,
+                            testTag = "menu_card_penghasilan",
+                            onClick = onNavigateToPenghasilan,
+                            modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }
 
