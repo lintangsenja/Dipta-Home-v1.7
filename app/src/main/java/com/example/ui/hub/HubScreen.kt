@@ -905,11 +905,11 @@ fun HubScreen(
         modifier = modifier
     ) {
         Scaffold { innerPadding ->
-            Surface(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                color = MaterialTheme.colorScheme.background
+                    .padding(innerPadding)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -944,32 +944,6 @@ fun HubScreen(
                                         )
                                     )
                             )
-
-                            // Hamburger Menu Button (Garis 3) di sudut kiri atas banner
-                            Surface(
-                                modifier = Modifier
-                                    .statusBarsPadding()
-                                    .padding(start = 16.dp, top = 16.dp)
-                                    .align(Alignment.TopStart),
-                                shape = CircleShape,
-                                color = Color.White.copy(alpha = 0.9f),
-                                shadowElevation = 4.dp
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        scope.launch { drawerState.open() }
-                                    },
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .testTag("hamburger_menu_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = "Menu Navigasi",
-                                        tint = SoftTextDark
-                                    )
-                                }
-                            }
                         }
                     }
 
@@ -1337,6 +1311,32 @@ fun HubScreen(
                     }
 
                     item { Spacer(modifier = Modifier.height(24.dp)) }
+                }
+
+                // Fixed / Sticky Floating Hamburger Menu Button (Garis 3) di sudut kiri atas
+                Surface(
+                    modifier = Modifier
+                        .padding(start = 16.dp, top = 16.dp)
+                        .align(Alignment.TopStart),
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.95f),
+                    border = BorderStroke(1.dp, SageGreenPrimaryContainer.copy(alpha = 0.8f)),
+                    shadowElevation = 6.dp
+                ) {
+                    IconButton(
+                        onClick = {
+                            scope.launch { drawerState.open() }
+                        },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .testTag("hamburger_menu_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menu Navigasi",
+                            tint = SoftTextDark
+                        )
+                    }
                 }
             }
         }

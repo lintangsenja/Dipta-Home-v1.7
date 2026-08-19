@@ -64,13 +64,16 @@ class FirestoreSyncManager(
         return getFirebaseInitError() == null
     }
 
-    private val firestore: FirebaseFirestore?
-        get() = if (isFirebaseAvailable()) {
-            try { FirebaseFirestore.getInstance() } catch (e: Exception) {
+    private val firestore: FirebaseFirestore? by lazy {
+        if (isFirebaseAvailable()) {
+            try {
+                FirebaseFirestore.getInstance()
+            } catch (e: Exception) {
                 lastErrorDetail = "Gagal memuat FirebaseFirestore: ${e.localizedMessage}"
                 null
             }
         } else null
+    }
 
     fun getLastAuthError(): String? = lastErrorDetail
 
