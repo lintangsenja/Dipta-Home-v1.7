@@ -39,6 +39,7 @@ import com.example.ui.theme.SoftTextDark
 import com.example.ui.theme.SoftTextMuted
 import com.example.ui.theme.SoftCreamCanvas
 import com.example.ui.theme.SageGreenPrimaryContainer
+import com.example.ui.common.BackupRestoreDialog
 import com.example.ui.common.DateRangeFilterDialog
 import com.example.data.entity.AdditionalIncome
 import com.example.data.entity.MainSalaryConfig
@@ -285,6 +286,7 @@ fun HubScreen(
 
     var selectedRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreDialog by remember { mutableStateOf(false) }
+    var showBackupRestoreDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var overwriteOption by remember { mutableStateOf(true) }
     var showAddVehicleDialog by remember { mutableStateOf(false) }
@@ -578,457 +580,207 @@ fun HubScreen(
                         }
                     }
 
-                    // Section 1: Sinkronisasi Cloud
+                    // Section 1: MODUL RUMAH TANGGA
                     item {
                         Text(
-                            text = "SINKRONISASI CLOUD",
+                            text = "MODUL RUMAH TANGGA",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = SageGreenPrimary,
                             modifier = Modifier.padding(start = 4.dp)
                         )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, SageGreenPrimaryContainer),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("cloud_sync_card")
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(CircleShape)
-                                                .background(SageGreenPrimary.copy(alpha = 0.15f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.CloudSync,
-                                                contentDescription = null,
-                                                tint = SageGreenPrimary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text(
-                                                text = "Firebase Firestore",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Sinkronisasi Otomatis",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    if (syncStatus.isSyncing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                            color = SageGreenPrimary,
-                                            strokeWidth = 2.dp
-                                        )
-                                    }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = SageGreenPrimary.copy(alpha = 0.08f),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = if (syncStatus.isSuccess) Icons.Default.CheckCircle else Icons.Default.Warning,
-                                                contentDescription = null,
-                                                tint = if (syncStatus.isSuccess) SageGreenPrimary else MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = if (syncStatus.isSuccess) "Status: Terhubung ke Firebase" else "Status: Kendala Koneksi",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (syncStatus.isSuccess) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
-                                            )
-                                        }
-
-                                        if (syncStatus.message.isNotBlank()) {
-                                            Text(
-                                                text = syncStatus.message,
-                                                fontSize = 11.sp,
-                                                color = if (syncStatus.isSuccess) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.Schedule,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Terakhir: ${formatSyncTime(syncStatus.lastSyncTime)}",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Button(
-                                    onClick = { onManualSync() },
-                                    enabled = !syncStatus.isSyncing,
-                                    colors = ButtonDefaults.buttonColors(containerColor = SageGreenPrimary),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("btn_manual_sync_drawer")
-                                ) {
-                                    if (syncStatus.isSyncing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            color = Color.White,
-                                            strokeWidth = 2.dp
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Menyinkronkan...", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Default.Sync,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Sync Manual Sekarang", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
                     }
 
-                    // Section 2: Backup & Restore Lokal
                     item {
-                        Text(
-                            text = "CADANGAN & RESTORE LOKAL",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = SageGreenPrimary,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, SageGreenPrimaryContainer),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(DustyRoseAccent.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Save,
-                                            contentDescription = null,
-                                            tint = DustyRoseAccent,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = "Berkas Cadangan (.json)",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "Simpan atau Pulihkan Data",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
-                                            exportLauncher.launch("DiptaHome_Backup_$dateStr.json")
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = DustyRoseAccent),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("btn_export_json")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CloudUpload,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Ekspor", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            importLauncher.launch(arrayOf("application/json", "*/*"))
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("btn_import_json")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CloudDownload,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Impor", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Section 3: Laporan Keuangan
-                    item {
-                        Text(
-                            text = "LAPORAN & REKAPITULASI",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = SageGreenPrimary,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, SageGreenPrimaryContainer),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    scope.launch { drawerState.close() }
-                                    showExportDialog = true
-                                }
-                                .testTag("btn_export_drawer")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(SageGreenPrimary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Summarize,
-                                        contentDescription = null,
-                                        tint = SageGreenPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Cetak & Export Laporan",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Format PDF Formal & Excel (.xlsx)",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = SageGreenPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Section 3b: Sumber Penghasilan
-                    item {
-                        Text(
-                            text = "SUMBER PENGHASILAN",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = SageGreenPrimary,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, SageGreenPrimaryContainer),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // 1. Sumber Penghasilan
+                            DrawerNavRow(
+                                icon = Icons.Default.AccountBalanceWallet,
+                                label = "Sumber Penghasilan",
+                                subtitle = "Gaji pokok & pemasukan tambahan",
+                                tint = SageGreenPrimary,
+                                testTag = "drawer_nav_penghasilan",
+                                onClick = {
                                     scope.launch { drawerState.close() }
                                     onNavigateToPenghasilan()
                                 }
-                                .testTag("btn_penghasilan_drawer")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(SageGreenPrimary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AccountBalanceWallet,
-                                        contentDescription = null,
-                                        tint = SageGreenPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                            )
+
+                            // 2. Catat Warung & Belanja
+                            DrawerNavRow(
+                                icon = Icons.Default.ShoppingCart,
+                                label = "Catat Warung & Belanja",
+                                subtitle = "Belanja harian, hutang & cicilan",
+                                tint = WarungGreenPastelIcon,
+                                testTag = "drawer_nav_warung",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToWarung()
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Sumber Penghasilan",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Gaji pokok & penghasilan tambahan",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                            )
+
+                            // 3. Resep & Rencana Masak
+                            DrawerNavRow(
+                                icon = Icons.Default.ReceiptLong,
+                                label = "Resep & Rencana Masak",
+                                subtitle = "Koleksi resep & menu mingguan",
+                                tint = SageGreenPrimary,
+                                testTag = "drawer_nav_resep",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToResep()
                                 }
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = SageGreenPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            )
+
+                            // 4. Belanja Anak
+                            DrawerNavRow(
+                                icon = Icons.Default.ChildCare,
+                                label = "Belanja Anak",
+                                subtitle = "Kebutuhan & catatan anak",
+                                tint = Color(0xFFE91E63),
+                                testTag = "drawer_nav_anak",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToAnak()
+                                }
+                            )
+
+                            // 5. Catat Bensin
+                            DrawerNavRow(
+                                icon = Icons.Default.LocalGasStation,
+                                label = "Catat Bensin",
+                                subtitle = "Bahan bakar & odometer",
+                                tint = FuelBluePastelIcon,
+                                testTag = "drawer_nav_bensin",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToBensin()
+                                }
+                            )
+
+                            // 6. Catat Oli
+                            DrawerNavRow(
+                                icon = Icons.Default.OilBarrel,
+                                label = "Catat Oli",
+                                subtitle = "Oli mesin & gardan",
+                                tint = OilYellowPastelIcon,
+                                testTag = "drawer_nav_oli",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToOli()
+                                }
+                            )
+
+                            // 7. Servis & Perawatan
+                            DrawerNavRow(
+                                icon = Icons.Default.Build,
+                                label = "Servis & Perawatan",
+                                subtitle = "Perbaikan & suku cadang",
+                                tint = ServisPurplePastelIcon,
+                                testTag = "drawer_nav_servis",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToServis()
+                                }
+                            )
+
+                            // 8. Catat kWh Listrik
+                            DrawerNavRow(
+                                icon = Icons.Default.ElectricBolt,
+                                label = "Catat kWh Listrik",
+                                subtitle = "Token & meteran listrik",
+                                tint = ElectricityOrangePastelIcon,
+                                testTag = "drawer_nav_listrik",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToListrik()
+                                }
+                            )
+
+                            // 9. Setoran Jimpitan & Kurban
+                            DrawerNavRow(
+                                icon = Icons.Default.VolunteerActivism,
+                                label = "Setoran Jimpitan & Kurban",
+                                subtitle = "Audit setoran warga & sosial",
+                                tint = JimpitanTealPastelIcon,
+                                testTag = "drawer_nav_jimpitan",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    onNavigateToJimpitan()
+                                }
+                            )
                         }
                     }
 
-                    // Section 4: Pengaturan Siklus Gaji
+                    // Section 2: SISTEM & CADANGAN
                     item {
                         Text(
-                            text = "PENGATURAN SIKLUS GAJI",
+                            text = "SISTEM & CADANGAN",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = SageGreenPrimary,
                             modifier = Modifier.padding(start = 4.dp)
                         )
+                    }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Unified Backup & Restore in Drawer
+                            DrawerNavRow(
+                                icon = Icons.Default.CloudSync,
+                                label = "Backup & Restore",
+                                subtitle = "Cloud Firebase & Cadangan .json",
+                                tint = SageGreenPrimary,
+                                badge = if (syncStatus.isSyncing) "Syncing" else if (syncStatus.isSuccess) "Aktif" else "Lokal",
+                                testTag = "drawer_nav_backup_restore",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    showBackupRestoreDialog = true
+                                }
+                            )
 
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, SageGreenPrimaryContainer),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
+                            // Cetak & Export Laporan
+                            DrawerNavRow(
+                                icon = Icons.Default.Summarize,
+                                label = "Cetak & Export Laporan",
+                                subtitle = "Format PDF Formal & Excel (.xlsx)",
+                                tint = SageGreenPrimary,
+                                testTag = "drawer_nav_export",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    showExportDialog = true
+                                }
+                            )
+
+                            // Pengaturan Siklus Gaji
+                            DrawerNavRow(
+                                icon = Icons.Default.Schedule,
+                                label = "Siklus Gajian (Tgl ${activePeriod.startDay})",
+                                subtitle = activePeriod.displayPeriod,
+                                tint = SageGreenPrimary,
+                                testTag = "drawer_nav_paycheck_settings",
+                                onClick = {
                                     scope.launch { drawerState.close() }
                                     showPaycheckSettingsDialog = true
                                 }
-                                .testTag("btn_paycheck_settings_drawer")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(SageGreenPrimary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AccountBalanceWallet,
-                                        contentDescription = null,
-                                        tint = SageGreenPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                            )
+
+                            // Garasi & Tambah Kendaraan
+                            DrawerNavRow(
+                                icon = Icons.Default.Garage,
+                                label = "Garasi Kendaraan (${vehicles.size})",
+                                subtitle = activeVehicle?.let { "Aktif: ${it.nama_kendaraan} (${it.nomor_plat})" } ?: "Kelola & tambah kendaraan",
+                                tint = SageGreenPrimary,
+                                testTag = "drawer_nav_garage",
+                                onClick = {
+                                    scope.launch { drawerState.close() }
+                                    showAddVehicleDialog = true
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Siklus Gajian (Tgl ${activePeriod.startDay})",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = activePeriod.displayPeriod,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = SageGreenPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            )
                         }
                     }
 
-                    // Section 5: Pemeliharaan Sistem & Master Reset (Compact Icon Menu)
+                    // Section 3: PEMELIHARAAN SISTEM
                     item {
                         Text(
                             text = "PEMELIHARAAN SISTEM",
@@ -1221,225 +973,7 @@ fun HubScreen(
                         }
                     }
 
-                    // 2. Multi-Vehicle Garage Section
-                    item {
-                        Card(
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White
-                            ),
-                            border = BorderStroke(1.2.dp, SageGreenPrimaryContainer),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .testTag("garage_card")
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(SageGreenPrimaryContainer),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Garage,
-                                                contentDescription = null,
-                                                tint = SageGreenPrimary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(
-                                                text = "Garasi Kendaraan",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
-                                            )
-                                            Text(
-                                                text = "${vehicles.size} Kendaraan Terdaftar",
-                                                fontSize = 10.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    TextButton(
-                                        onClick = { showAddVehicleDialog = true },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.testTag("btn_add_vehicle_hub")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = "Tambah Kendaraan",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Tambah", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                 if (vehicles.isEmpty()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.DirectionsCar,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "Belum ada kendaraan. Tekan + Tambah untuk mendaftarkan.",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    // Horizontal Vehicle List
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        items(vehicles, key = { it.id }) { vehicle ->
-                                            val isSelected = vehicle.id == (activeVehicle?.id ?: -1)
-                                            val vehicleIcon = if (vehicle.jenis_kendaraan.equals("Mobil", ignoreCase = true)) {
-                                                Icons.Default.DirectionsCar
-                                            } else {
-                                                Icons.Default.TwoWheeler
-                                            }
-
-                                            Surface(
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = if (isSelected) SageGreenPrimary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                                modifier = Modifier
-                                                    .border(
-                                                        width = if (isSelected) 1.2.dp else 0.dp,
-                                                        color = if (isSelected) SageGreenPrimary else Color.Transparent,
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    )
-                                                    .clickable { onSelectVehicle(vehicle.id) }
-                                                    .testTag("vehicle_chip_${vehicle.id}")
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(
-                                                        imageVector = vehicleIcon,
-                                                        contentDescription = null,
-                                                        tint = if (isSelected) SageGreenPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Column {
-                                                        Text(
-                                                            text = vehicle.nama_kendaraan,
-                                                            fontSize = 12.sp,
-                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                            color = if (isSelected) SageGreenPrimary else MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                        if (vehicle.nomor_plat.isNotBlank()) {
-                                                            Text(
-                                                                text = vehicle.nomor_plat,
-                                                                fontSize = 9.sp,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    }
-
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    IconButton(
-                                                        onClick = { deleteCandidateVehicle = vehicle },
-                                                        modifier = Modifier.size(20.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.DeleteOutline,
-                                                            contentDescription = "Hapus Kendaraan",
-                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
-                                                            modifier = Modifier.size(13.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Active Vehicle Tax / STNK Expiration Alert Banner (30 Days check) & Quick Sparepart History
-                                    activeVehicle?.let { v ->
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        var daysRemaining = -1
-                                        if (v.tanggal_pajak_stnk.isNotBlank()) {
-                                            try {
-                                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                                val pDate = sdf.parse(v.tanggal_pajak_stnk)
-                                                if (pDate != null) {
-                                                    val diff = pDate.time - System.currentTimeMillis()
-                                                    daysRemaining = (diff / (1000 * 60 * 60 * 24)).toInt()
-                                                }
-                                            } catch (_: Exception) {}
-                                        }
-
-                                        if (daysRemaining in 0..30 || v.tanggal_pajak_stnk.isNotBlank()) {
-                                            Surface(
-                                                shape = RoundedCornerShape(10.dp),
-                                                color = if (daysRemaining in 0..30) Color(0xFFFFF3E0) else Color(0xFFE8F5E9),
-                                                border = BorderStroke(1.dp, if (daysRemaining in 0..30) Color(0xFFFFB74D) else Color(0xFFA5D6A7)),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(10.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (daysRemaining in 0..30) Icons.Default.Warning else Icons.Default.CheckCircle,
-                                                        contentDescription = "Pajak STNK Alert",
-                                                        tint = if (daysRemaining in 0..30) Color(0xFFE65100) else Color(0xFF2E7D32),
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Column {
-                                                        Text(
-                                                            text = if (daysRemaining in 0..30)
-                                                                "⚠️ Peringatan Jatuh Tempo Pajak/STNK: ${daysRemaining} hari lagi (${v.tanggal_pajak_stnk})"
-                                                            else
-                                                                "Pajak / STNK Terdaftar: Jatuh Tempo ${v.tanggal_pajak_stnk}",
-                                                            fontSize = 11.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = if (daysRemaining in 0..30) Color(0xFFE65100) else Color(0xFF2E7D32)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. Ringkasan Keuangan (Dashboard Summary with Paycheck Cycle Filter)
+                    // 2. Ringkasan Keuangan (Dashboard Summary with Paycheck Cycle Filter)
                     item {
                         fun isDateInActiveRange(timestamp: Long = 0L, dateStr: String = ""): Boolean {
                             val dateToTest = if (dateStr.isNotBlank()) {
@@ -1570,18 +1104,6 @@ fun HubScreen(
                                 financialSummary = activeFinancialSummary,
                                 modifier = Modifier.fillMaxWidth()
                             )
-
-                            // Grouped Bar Chart Section (Perbandingan Pendapatan vs Pengeluaran)
-                            if (monthlyChartData.isNotEmpty() || yearlyChartData.isNotEmpty()) {
-                                var hubChartMode by remember { mutableStateOf("monthly") }
-                                GroupedBarChartSection(
-                                    chartMode = hubChartMode,
-                                    monthlyChartData = monthlyChartData,
-                                    yearlyChartData = yearlyChartData,
-                                    onChangeChartMode = { hubChartMode = it },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
 
                             Card(
                                 shape = RoundedCornerShape(18.dp),
@@ -1791,213 +1313,22 @@ fun HubScreen(
                                 }
                             }
                         }
+
+                        // Grouped Bar Chart Section (Perbandingan Pendapatan vs Pengeluaran) - Diletakkan di bawah Ringkasan Keuangan
+                        if (monthlyChartData.isNotEmpty() || yearlyChartData.isNotEmpty()) {
+                            var hubChartMode by remember { mutableStateOf("monthly") }
+                            GroupedBarChartSection(
+                                chartMode = hubChartMode,
+                                monthlyChartData = monthlyChartData,
+                                yearlyChartData = yearlyChartData,
+                                onChangeChartMode = { hubChartMode = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
 
-                    // 4. Section Title: Modul Utama
-                    item {
-                        Text(
-                            text = "Modul Utama Rumah Tangga",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(start = 20.dp, top = 4.dp, end = 20.dp)
-                        )
-                    }
-
-                    // 4a. Module 0: Sumber Penghasilan (Gaji Pokok & Penghasilan Tambahan)
-                    item {
-                        val activeIncomeCount = additionalIncomes.count { it.isActive }
-                        val salarySubtitle = if (mainSalaryConfig != null && mainSalaryConfig.nominal > 0) {
-                            "Gaji Pokok: ${Formatters.formatRupiah(mainSalaryConfig.nominal)} • $activeIncomeCount Pemasukan Tambahan Aktif"
-                        } else {
-                            "Atur gaji pokok bulanan & catat pemasukan tambahan / uang kaget"
-                        }
-
-                        ModuleCard(
-                            title = "Sumber Penghasilan",
-                            subtitle = salarySubtitle,
-                            badgeText = "Gaji Pokok, Lemburan & Uang Kaget",
-                            icon = Icons.Default.AccountBalanceWallet,
-                            cardBackgroundColor = SageGreenPrimaryContainer,
-                            iconColor = SageGreenPrimary,
-                            testTag = "menu_card_penghasilan",
-                            onClick = onNavigateToPenghasilan,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 5. Module 1: Catat Warung & Belanja
-                    item {
-                        ModuleCard(
-                            title = "Catat Warung & Belanja",
-                            subtitle = "Belanja harian, hutang warung, cicilan, & note belanja",
-                            badgeText = "Dapur, Belanja & Hutang Warung",
-                            icon = Icons.Default.ShoppingCart,
-                            cardBackgroundColor = WarungGreenPastelBg,
-                            iconColor = WarungGreenPastelIcon,
-                            testTag = "menu_card_warung",
-                            onClick = onNavigateToWarung,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 5a. Module 1a: Kumpulan Resep & Rencana Masak Dapur
-                    item {
-                        ModuleCard(
-                            title = "Resep & Rencana Masak",
-                            subtitle = "Catatan resep dapur murni teks & kalender menu mingguan",
-                            badgeText = "Spesial Dapur & Menu Mingguan",
-                            icon = Icons.Default.ReceiptLong,
-                            cardBackgroundColor = SageGreenPrimaryContainer,
-                            iconColor = SageGreenPrimary,
-                            testTag = "menu_card_resep",
-                            onClick = onNavigateToResep,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 5b. Module 1b: Catat Belanja Anak
-                    item {
-                        val anakSummary = if (childExpenses.isNotEmpty()) {
-                            val lastLog = childExpenses.first()
-                            "Pengeluaran Terakhir: ${Formatters.formatRupiah(lastLog.totalPengeluaran)} (${lastLog.tanggal})"
-                        } else {
-                            "Belum ada pencatatan belanja anak"
-                        }
-
-                        ModuleCard(
-                            title = "Belanja Anak",
-                            subtitle = anakSummary,
-                            badgeText = "Kebutuhan & Belanja Anak",
-                            icon = Icons.Default.ChildCare,
-                            cardBackgroundColor = Color(0xFFFCE4EC),
-                            iconColor = Color(0xFFE91E63),
-                            testTag = "menu_card_anak",
-                            onClick = onNavigateToAnak,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 6. Module 2: Catat Bensin / Isi Bensin
-                    item {
-                        val bensinSummary = if (latestFuel != null) {
-                            "KM Terakhir: ${Formatters.formatNumber(latestFuel.km_motor)} km " +
-                                    if (latestFuel.km_per_liter > 0) "• ${String.format("%.1f", latestFuel.km_per_liter)} km/L" else ""
-                        } else {
-                            "Belum ada data pencatatan bensin"
-                        }
-
-                        val activeVehicleBadge = activeVehicle?.let { "${it.nama_kendaraan} (${it.nomor_plat})" } ?: "Bahan Bakar & Efisiensi"
-
-                        ModuleCard(
-                            title = "Catat Bensin",
-                            subtitle = bensinSummary,
-                            badgeText = activeVehicleBadge,
-                            icon = Icons.Default.LocalGasStation,
-                            cardBackgroundColor = FuelBluePastelBg,
-                            iconColor = FuelBluePastelIcon,
-                            testTag = "menu_card_bensin",
-                            onClick = onNavigateToBensin,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 7. Module 3: Jimpitan & Sosial
-                    item {
-                        val jimpitanSummary = if (latestSocial != null) {
-                            "Terakhir: ${latestSocial.kategori} (${Formatters.formatRupiah(latestSocial.nominal)})"
-                        } else {
-                            "Belum ada catatan jimpitan / kurban"
-                        }
-
-                        ModuleCard(
-                            title = "Setoran Jimpitan & Kurban",
-                            subtitle = jimpitanSummary,
-                            badgeText = "Buku & Audit Mandiri Setoran",
-                            icon = Icons.Default.VolunteerActivism,
-                            cardBackgroundColor = JimpitanTealPastelBg,
-                            iconColor = JimpitanTealPastelIcon,
-                            testTag = "menu_card_jimpitan",
-                            onClick = onNavigateToJimpitan,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 8. Module 4: Catat kWh Listrik
-                    item {
-                        val listrikSummary = if (latestElectricity != null) {
-                            if (latestElectricity.is_initial) {
-                                "Sisa Meteran Awal: ${Formatters.formatNumber(latestElectricity.jumlah_kwh)} kWh"
-                            } else {
-                                val totalAktif = if (latestElectricity.total_kwh_aktif > 0f) latestElectricity.total_kwh_aktif else latestElectricity.jumlah_kwh
-                                "Total Aktif: ${Formatters.formatNumber(totalAktif)} kWh " +
-                                        if (latestElectricity.kwh_per_hari > 0f) "• ${String.format("%.1f", latestElectricity.kwh_per_hari)} kWh/hr" else ""
-                            }
-                        } else {
-                            "Belum ada data catatan kWh listrik"
-                        }
-
-                        ModuleCard(
-                            title = "Catat kWh Listrik",
-                            subtitle = listrikSummary,
-                            badgeText = "Token & Konsumsi Listrik",
-                            icon = Icons.Default.ElectricBolt,
-                            cardBackgroundColor = ElectricityOrangePastelBg,
-                            iconColor = ElectricityOrangePastelIcon,
-                            testTag = "menu_card_listrik",
-                            onClick = onNavigateToListrik,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 9. Module 5: Catat Oli
-                    item {
-                        val oliSummary = if (latestOil != null) {
-                            "Servis Terakhir: ${latestOil.jenis_oli} di ${Formatters.formatNumber(latestOil.km_motor)} km"
-                        } else {
-                            "Belum ada data penggantian oli"
-                        }
-
-                        val activeVehicleBadge = activeVehicle?.let { "${it.nama_kendaraan} (${it.nomor_plat})" } ?: "Perawatan Mesin & Gardan"
-
-                        ModuleCard(
-                            title = "Catat Oli",
-                            subtitle = oliSummary,
-                            badgeText = activeVehicleBadge,
-                            icon = Icons.Default.OilBarrel,
-                            cardBackgroundColor = OilYellowPastelBg,
-                            iconColor = OilYellowPastelIcon,
-                            testTag = "menu_card_oli",
-                            onClick = onNavigateToOli,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 10. Module 6: Servis & Perawatan
-                    item {
-                        val servisSummary = if (latestService != null) {
-                            "Servis Terakhir: ${latestService.kategori} (${Formatters.formatRupiah(latestService.total_biaya)})"
-                        } else {
-                            "Belum ada data servis / ganti suku cadang"
-                        }
-
-                        val activeVehicleBadge = activeVehicle?.let { "${it.nama_kendaraan} (${it.nomor_plat})" } ?: "Perbaikan & Suku Cadang"
-
-                        ModuleCard(
-                            title = "Servis & Perawatan",
-                            subtitle = servisSummary,
-                            badgeText = activeVehicleBadge,
-                            icon = Icons.Default.Build,
-                            cardBackgroundColor = ServisPurplePastelBg,
-                            iconColor = ServisPurplePastelIcon,
-                            testTag = "menu_card_servis",
-                            onClick = onNavigateToServis,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-
-                    // 11. Recent Activities Section
+                    // 3. Recent Activities Section
                     item {
                         RecentActivityCard(
                             activities = recentActivities,
@@ -2197,6 +1528,27 @@ fun HubScreen(
             onSave = { newDay ->
                 onUpdatePaycheckStartDay(newDay)
                 showPaycheckSettingsDialog = false
+            }
+        )
+    }
+
+    if (showBackupRestoreDialog) {
+        BackupRestoreDialog(
+            syncStatus = syncStatus,
+            currentUser = currentUser,
+            onDismiss = { showBackupRestoreDialog = false },
+            onManualSync = onManualSync,
+            onSyncToCloud = onSyncToCloud,
+            onSyncFromCloud = onSyncFromCloud,
+            onSignOutFirebase = onSignOutFirebase,
+            onExportJson = {
+                showBackupRestoreDialog = false
+                val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
+                exportLauncher.launch("DiptaHome_Backup_$dateStr.json")
+            },
+            onImportJson = {
+                showBackupRestoreDialog = false
+                importLauncher.launch(arrayOf("application/json", "*/*"))
             }
         )
     }
@@ -2734,11 +2086,14 @@ private fun DrawerNavRow(
     label: String,
     tint: Color,
     testTag: String,
+    subtitle: String? = null,
+    badge: String? = null,
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = SoftCreamCanvas,
+        border = BorderStroke(0.8.dp, SageGreenPrimaryContainer),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
@@ -2750,7 +2105,7 @@ private fun DrawerNavRow(
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .background(tint.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
@@ -2763,13 +2118,38 @@ private fun DrawerNavRow(
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = SoftTextDark,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTextDark
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (badge != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = tint.copy(alpha = 0.15f),
+                    modifier = Modifier.padding(end = 6.dp)
+                ) {
+                    Text(
+                        text = badge,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = tint,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
