@@ -268,6 +268,7 @@ fun HubScreen(
     onNavigateToWarung: () -> Unit = {},
     onNavigateToAnak: () -> Unit = {},
     onNavigateToResep: () -> Unit = {},
+    onNavigateToGarasi: () -> Unit = {},
     onSyncToCloud: () -> Unit,
     onSyncFromCloud: () -> Unit,
     onManualSync: () -> Unit = {},
@@ -774,7 +775,7 @@ fun HubScreen(
                                 testTag = "drawer_nav_garage",
                                 onClick = {
                                     scope.launch { drawerState.close() }
-                                    showAddVehicleDialog = true
+                                    onNavigateToGarasi()
                                 }
                             )
                         }

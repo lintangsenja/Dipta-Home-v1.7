@@ -46,7 +46,20 @@ class FirestoreSyncManager(
         prefs.edit().putLong("last_sync_time", timestamp).apply()
     }
 
+    fun isPlayServicesAvailable(): Boolean {
+        return try {
+            val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+            val result = availability.isGooglePlayServicesAvailable(context)
+            result == com.google.android.gms.common.ConnectionResult.SUCCESS
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
     private fun getFirebaseInitError(): String? {
+        if (!isPlayServicesAvailable()) {
+            return "Layanan Google Play Services tidak tersedia di perangkat ini. Menggunakan database lokal."
+        }
         return try {
             if (FirebaseApp.getApps(context).isEmpty()) {
                 val app = FirebaseApp.initializeApp(context)
@@ -61,7 +74,7 @@ class FirestoreSyncManager(
     }
 
     private fun isFirebaseAvailable(): Boolean {
-        return getFirebaseInitError() == null
+        return isPlayServicesAvailable() && getFirebaseInitError() == null
     }
 
     private val firestore: FirebaseFirestore? by lazy {

@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ui.TrackerViewModel
 import com.example.ui.anak.AnakScreen
 import com.example.ui.bensin.BensinScreen
+import com.example.ui.garasi.GarasiScreen
 import com.example.ui.hub.HubScreen
 import com.example.ui.jimpitan.JimpitanScreen
 import com.example.ui.listrik.ListrikScreen
@@ -60,6 +61,7 @@ object Routes {
     const val ANAK = "anak"
     const val RESEP = "resep"
     const val PENGHASILAN = "penghasilan"
+    const val GARASI = "garasi"
 }
 
 @Composable
@@ -141,6 +143,7 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 onNavigateToWarung = { navController.navigate(Routes.WARUNG) },
                 onNavigateToAnak = { navController.navigate(Routes.ANAK) },
                 onNavigateToResep = { navController.navigate(Routes.RESEP) },
+                onNavigateToGarasi = { navController.navigate(Routes.GARASI) },
                 onSyncToCloud = { viewModel.syncToCloud() },
                 onSyncFromCloud = { viewModel.syncFromCloud() },
                 onManualSync = { viewModel.triggerFullManualSync() },
@@ -345,6 +348,23 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 onNextCycle = { viewModel.nextPaycheckCycle() },
                 onResetCycle = { viewModel.resetPaycheckCycle() },
                 onUpdatePaycheckStartDay = { day -> viewModel.setPaycheckStartDay(day) },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.GARASI) {
+            GarasiScreen(
+                vehicles = vehicles,
+                activeVehicleId = activeVehicleId,
+                fuelLogs = fuelLogs,
+                oilLogs = oilLogs,
+                serviceLogs = serviceLogs,
+                onSelectActiveVehicle = { id -> viewModel.selectActiveVehicle(id) },
+                onAddVehicle = { nama, plat, jenis, icon, pajak, sparepart ->
+                    viewModel.addVehicle(nama, plat, jenis, icon, pajak, sparepart)
+                },
+                onUpdateVehicle = { vehicle -> viewModel.updateVehicle(vehicle) },
+                onDeleteVehicle = { id -> viewModel.deleteVehicle(id) },
                 onNavigateBack = { navController.popBackStack() }
             )
         }

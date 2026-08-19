@@ -1,5 +1,6 @@
 package com.example.ui.penghasilan
 
+import android.app.DatePickerDialog
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
@@ -79,6 +82,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -117,6 +121,7 @@ import com.example.ui.util.Formatters
 import com.example.ui.util.PaycheckCycleHelper
 import com.example.ui.util.PaycheckPeriod
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -1638,14 +1643,50 @@ private fun AddEditAdditionalIncomeDialog(
     ) -> Unit
 ) {
     val isEdit = income != null
+    val context = LocalContext.current
+    val sdf = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    val cal = remember { Calendar.getInstance() }
+
     var judul by remember { mutableStateOf(income?.judul ?: "") }
     var kategori by remember { mutableStateOf(income?.kategori ?: "Lemburan") }
     var nominalText by remember {
         mutableStateOf(if (income != null && income.nominal > 0) income.nominal.toLong().toString() else "")
     }
     var tanggal by remember {
-        mutableStateOf(income?.tanggal ?: SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()))
+        mutableStateOf(income?.tanggal ?: sdf.format(Date()))
     }
+
+    LaunchedEffect(income) {
+        if (income != null) {
+            try {
+                if (income.tanggal.isNotBlank()) {
+                    val parsed = sdf.parse(income.tanggal)
+                    if (parsed != null) cal.time = parsed
+                } else if (income.timestamp > 0) {
+                    cal.timeInMillis = income.timestamp
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    val datePicker = remember(context) {
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                cal.set(Calendar.YEAR, year)
+                cal.set(Calendar.MONTH, month)
+                cal.set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                cal.set(Calendar.HOUR_OF_DAY, 12)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                tanggal = sdf.format(cal.time)
+            },
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH),
+            cal.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
     var isActive by remember { mutableStateOf(income?.isActive ?: true) }
     var targetOffset by remember { mutableIntStateOf(income?.targetCycleOffset ?: 0) }
     var catatan by remember { mutableStateOf(income?.catatan ?: "") }
@@ -1736,12 +1777,42 @@ private fun AddEditAdditionalIncomeDialog(
                 }
 
                 item {
-                    OutlinedTextField(
-                        value = tanggal,
-                        onValueChange = { tanggal = it },
-                        label = { Text("Tanggal Penerimaan (yyyy-MM-dd)") },
-                        modifier = Modifier.fillMaxWidth().testTag("input_income_tanggal")
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { datePicker.show() }
+                    ) {
+                        OutlinedTextField(
+                            value = tanggal,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Tanggal Penerimaan") },
+                            placeholder = { Text("Pilih tanggal dari kalender") },
+                            trailingIcon = {
+                                IconButton(onClick = { datePicker.show() }) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarMonth,
+                                        contentDescription = "Pilih Tanggal Kalender",
+                                        tint = SageGreenPrimary
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SageGreenPrimary,
+                                unfocusedBorderColor = Color.LightGray
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_income_tanggal")
+                        )
+                        // Transparent clickable overlay ensuring any touch triggers the DatePicker
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { datePicker.show() }
+                        )
+                    }
                 }
 
                 item {
