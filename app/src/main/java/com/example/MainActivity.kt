@@ -90,6 +90,7 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
     val deletedRecipes by viewModel.deletedRecipes.collectAsStateWithLifecycle()
     val mealPlanItems by viewModel.mealPlanItems.collectAsStateWithLifecycle()
     val currentPaycheckPeriod by viewModel.currentPaycheckPeriod.collectAsStateWithLifecycle()
+    val includePreviousSurplus by viewModel.includePreviousSurplus.collectAsStateWithLifecycle()
     val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
 
@@ -312,6 +313,10 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 currentPeriod = currentPaycheckPeriod,
                 monthlyChartData = monthlyComparisonChartData,
                 yearlyChartData = yearlyComparisonChartData,
+                includePreviousSurplus = includePreviousSurplus,
+                onToggleIncludePreviousSurplus = { enabled ->
+                    viewModel.setIncludePreviousSurplus(enabled)
+                },
                 onSetMainSalary = { nominal, catatan ->
                     viewModel.setMainSalary(nominal, catatan)
                 },
@@ -330,8 +335,8 @@ fun KeluargaTrackerApp(viewModel: TrackerViewModel) {
                 onUpdateAdditionalIncome = { income ->
                     viewModel.updateAdditionalIncome(income)
                 },
-                onToggleAdditionalIncome = { id, isActive, targetCycleOffset, targetCycleLabel ->
-                    viewModel.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel)
+                onToggleAdditionalIncome = { id, isActive, targetCycleOffset, targetCycleLabel, catatan ->
+                    viewModel.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel, catatan)
                 },
                 onDeleteAdditionalIncome = { id ->
                     viewModel.deleteAdditionalIncome(id)

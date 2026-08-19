@@ -54,6 +54,9 @@ data class MonthlyExpenseSummary(
 data class FinancialCycleSummary(
     val mainSalary: Double = 0.0,
     val additionalIncomeTotal: Double = 0.0,
+    val previousCycleSurplus: Double = 0.0,
+    val includePreviousSurplus: Boolean = false,
+    val carriedOverSurplusApplied: Double = 0.0,
     val totalIncome: Double = 0.0,
     val totalExpense: Double = 0.0,
     val remainingBalance: Double = 0.0,
@@ -94,6 +97,16 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
 
     private val _paycheckCycleOffset = MutableStateFlow(0)
     val paycheckCycleOffset: StateFlow<Int> = _paycheckCycleOffset.asStateFlow()
+
+    private val _includePreviousSurplus = MutableStateFlow(
+        prefs.getBoolean("include_previous_surplus", false)
+    )
+    val includePreviousSurplus: StateFlow<Boolean> = _includePreviousSurplus.asStateFlow()
+
+    fun setIncludePreviousSurplus(enabled: Boolean) {
+        _includePreviousSurplus.value = enabled
+        prefs.edit().putBoolean("include_previous_surplus", enabled).apply()
+    }
 
     val currentPaycheckPeriod: StateFlow<PaycheckPeriod> = combine(
         _paycheckStartDay,
@@ -305,14 +318,46 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
             initialValue = emptyList()
         )
 
-    // Financial Cycle Summary (Main Salary + Active Additional Incomes - Expenses)
+    // Financial Cycle Summary (Main Salary + Active Additional Incomes + Optional Carried-over Surplus - Expenses)
     val financialCycleSummary: StateFlow<FinancialCycleSummary> = combine(
         mainSalaryConfig,
         allAdditionalIncomes,
         monthlyExpenseSummary,
         currentPaycheckPeriod,
-        _paycheckCycleOffset
-    ) { salary, additions, expenseSummary, period, offset ->
+        _paycheckCycleOffset,
+        _paycheckStartDay,
+        _includePreviousSurplus,
+        dailyGroceryLogs,
+        randomExpenses,
+        childExpenses,
+        fuelLogs,
+        oilLogs,
+        serviceLogs,
+        electricityLogs
+    ) { flows ->
+        val salary = flows[0] as? MainSalaryConfig
+        @Suppress("UNCHECKED_CAST")
+        val additions = flows[1] as List<AdditionalIncome>
+        val expenseSummary = flows[2] as MonthlyExpenseSummary
+        val period = flows[3] as PaycheckPeriod
+        val offset = flows[4] as Int
+        val startDay = flows[5] as Int
+        val includeSurplus = flows[6] as Boolean
+        @Suppress("UNCHECKED_CAST")
+        val grocery = flows[7] as List<DailyGroceryLog>
+        @Suppress("UNCHECKED_CAST")
+        val random = flows[8] as List<RandomExpense>
+        @Suppress("UNCHECKED_CAST")
+        val child = flows[9] as List<ChildExpenseLog>
+        @Suppress("UNCHECKED_CAST")
+        val fuel = flows[10] as List<FuelLog>
+        @Suppress("UNCHECKED_CAST")
+        val oil = flows[11] as List<OilLog>
+        @Suppress("UNCHECKED_CAST")
+        val service = flows[12] as List<ServiceLog>
+        @Suppress("UNCHECKED_CAST")
+        val electricity = flows[13] as List<ElectricityLog>
+
         val baseSalary = salary?.nominal ?: 0.0
         
         // Filter additional incomes allocated to this cycle
@@ -323,9 +368,32 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
             // If cycle offset not explicitly locked, match period date
             inc.targetCycleOffset == 0 && offset == 0 || period.contains(inc.timestamp, inc.tanggal)
         }
-
         val additionTotal = activeAdditions.sumOf { it.nominal }
-        val totalIncome = baseSalary + additionTotal
+
+        // Calculate previous cycle surplus (offset - 1)
+        val prevPeriod = PaycheckCycleHelper.calculatePeriod(startDay = startDay, offset = offset - 1)
+        val prevAdditions = additions.filter { inc ->
+            inc.isActive && (inc.targetCycleOffset == offset - 1 || (inc.targetCycleLabel.isNotBlank() && inc.targetCycleLabel == prevPeriod.label) || (inc.targetCycleOffset == 0 && offset == 1) || prevPeriod.contains(inc.timestamp, inc.tanggal))
+        }.sumOf { it.nominal }
+        val prevTotalIncome = baseSalary + prevAdditions
+
+        val prevBelanja = grocery.filter { prevPeriod.contains(it.timestamp, it.tanggal) }
+            .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+        val prevRandom = random.filter { prevPeriod.contains(it.timestamp, it.tanggal) }
+            .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+        val prevChild = child.filter { prevPeriod.contains(it.timestamp, it.tanggal) }
+            .sumOf { (it.modalAwal - it.sisaUang).coerceAtLeast(0.0) }
+        val prevBensin = fuel.filter { prevPeriod.contains(timestamp = it.tanggal) }.sumOf { it.nominal.toDouble() }
+        val prevOli = oil.filter { prevPeriod.contains(timestamp = it.tanggal) }.sumOf { it.harga.toDouble() }
+        val prevServis = service.filter { prevPeriod.contains(timestamp = it.tanggal) }.sumOf { it.total_biaya.toDouble() }
+        val prevListrik = electricity.filter { prevPeriod.contains(timestamp = it.tanggal) }.sumOf { it.harga.toDouble() }
+        val prevTotalExpense = prevBelanja + prevRandom + prevChild + prevBensin + prevOli + prevServis + prevListrik
+
+        val prevNet = prevTotalIncome - prevTotalExpense
+        val previousCycleSurplus = if (prevNet > 0) prevNet else 0.0
+        val carriedOverSurplus = if (includeSurplus && previousCycleSurplus > 0) previousCycleSurplus else 0.0
+
+        val totalIncome = baseSalary + additionTotal + carriedOverSurplus
         val totalExpense = expenseSummary.grandTotal
         val remaining = totalIncome - totalExpense
         val isDeficit = remaining < 0
@@ -338,6 +406,9 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         FinancialCycleSummary(
             mainSalary = baseSalary,
             additionalIncomeTotal = additionTotal,
+            previousCycleSurplus = previousCycleSurplus,
+            includePreviousSurplus = includeSurplus,
+            carriedOverSurplusApplied = carriedOverSurplus,
             totalIncome = totalIncome,
             totalExpense = totalExpense,
             remainingBalance = remaining,
@@ -1148,10 +1219,27 @@ class TrackerViewModel(application: Application) : AndroidViewModel(application)
         id: Int,
         isActive: Boolean,
         targetCycleOffset: Int = 0,
-        targetCycleLabel: String = ""
+        targetCycleLabel: String = "",
+        catatan: String? = null
     ) {
         viewModelScope.launch {
-            repository.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel)
+            if (catatan != null) {
+                val current = allAdditionalIncomes.value.find { it.id == id }
+                if (current != null) {
+                    repository.updateAdditionalIncome(
+                        current.copy(
+                            isActive = isActive,
+                            targetCycleOffset = targetCycleOffset,
+                            targetCycleLabel = targetCycleLabel,
+                            catatan = catatan
+                        )
+                    )
+                } else {
+                    repository.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel)
+                }
+            } else {
+                repository.toggleAdditionalIncome(id, isActive, targetCycleOffset, targetCycleLabel)
+            }
             autoSyncToCloud()
         }
     }

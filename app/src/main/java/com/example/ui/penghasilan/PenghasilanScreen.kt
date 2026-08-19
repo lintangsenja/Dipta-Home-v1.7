@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.MonetizationOn
@@ -61,6 +64,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -126,6 +130,8 @@ fun PenghasilanScreen(
     yearlyChartData: List<BarChartItem> = emptyList(),
     currentPeriod: PaycheckPeriod? = null,
     paycheckStartDay: Int = 25,
+    includePreviousSurplus: Boolean = false,
+    onToggleIncludePreviousSurplus: (Boolean) -> Unit = {},
     onPrevCycle: () -> Unit = {},
     onNextCycle: () -> Unit = {},
     onResetCycle: () -> Unit = {},
@@ -142,7 +148,7 @@ fun PenghasilanScreen(
         catatan: String
     ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     onUpdateAdditionalIncome: (AdditionalIncome) -> Unit = {},
-    onToggleAdditionalIncome: (id: Int, isActive: Boolean, targetCycleOffset: Int, targetCycleLabel: String) -> Unit = { _, _, _, _ -> },
+    onToggleAdditionalIncome: (id: Int, isActive: Boolean, targetCycleOffset: Int, targetCycleLabel: String, catatan: String?) -> Unit = { _, _, _, _, _ -> },
     onDeleteAdditionalIncome: (id: Int) -> Unit = {},
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -299,12 +305,14 @@ fun PenghasilanScreen(
                     financialSummary = activeFinancialSummary,
                     currentPeriod = activePeriod,
                     paycheckStartDay = paycheckStartDay,
+                    includePreviousSurplus = includePreviousSurplus,
                     chartMode = chartMode,
                     monthlyChartData = monthlyChartData,
                     yearlyChartData = yearlyChartData,
                     onPrevCycle = onPrevCycle,
                     onNextCycle = onNextCycle,
                     onResetCycle = onResetCycle,
+                    onToggleIncludePreviousSurplus = onToggleIncludePreviousSurplus,
                     onChangeChartMode = { chartMode = it },
                     onEditSalaryClick = { showEditSalaryDialog = true }
                 )
@@ -314,11 +322,11 @@ fun PenghasilanScreen(
                     currentPeriod = activePeriod,
                     onToggle = { income ->
                         if (!income.isActive) {
-                            // Turning ON -> Show popup dialog to choose cycle allocation
+                            // Turning ON -> Show popup dialog to choose cycle allocation & optional note
                             togglingIncomeTarget = income
                         } else {
                             // Turning OFF -> directly deactivate
-                            onToggleAdditionalIncome(income.id, false, 0, "")
+                            onToggleAdditionalIncome(income.id, false, 0, "", null)
                             Toast.makeText(context, "${income.judul} dinonaktifkan dari siklus ini", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -390,8 +398,8 @@ fun PenghasilanScreen(
             currentPeriod = activePeriod,
             nextPeriod = nextPeriod,
             onDismiss = { togglingIncomeTarget = null },
-            onSelectAllocation = { offset, label ->
-                onToggleAdditionalIncome(income.id, true, offset, label)
+            onSelectAllocation = { offset, label, catatan ->
+                onToggleAdditionalIncome(income.id, true, offset, label, catatan)
                 togglingIncomeTarget = null
                 Toast.makeText(context, "${income.judul} diaktifkan untuk $label", Toast.LENGTH_SHORT).show()
             }
@@ -441,12 +449,14 @@ private fun GajiUtamaTabContent(
     financialSummary: FinancialCycleSummary,
     currentPeriod: PaycheckPeriod,
     paycheckStartDay: Int,
+    includePreviousSurplus: Boolean,
     chartMode: String,
     monthlyChartData: List<BarChartItem>,
     yearlyChartData: List<BarChartItem>,
     onPrevCycle: () -> Unit,
     onNextCycle: () -> Unit,
     onResetCycle: () -> Unit,
+    onToggleIncludePreviousSurplus: (Boolean) -> Unit,
     onChangeChartMode: (String) -> Unit,
     onEditSalaryClick: () -> Unit
 ) {
@@ -575,6 +585,147 @@ private fun GajiUtamaTabContent(
                         fontSize = 10.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 15.sp
+                    )
+                }
+            }
+        }
+
+        // 2b. Akumulasi Surplus Bulan Lalu (Buffer Fund) Card
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.2.dp, SageGreenPrimaryContainer),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("card_surplus_buffer_fund")
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(SageGreenPrimaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Savings,
+                                    contentDescription = null,
+                                    tint = SageGreenPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Akumulasi Surplus Bulan Lalu",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.5.sp
+                                )
+                                Text(
+                                    text = "Dana Cadangan / Buffer Fund",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = includePreviousSurplus,
+                            onCheckedChange = { onToggleIncludePreviousSurplus(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SageGreenPrimary,
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color.LightGray.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.testTag("switch_include_previous_surplus")
+                        )
+                    }
+
+                    // Calculation breakdown
+                    val prevSurplus = financialSummary.previousCycleSurplus
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (includePreviousSurplus && prevSurplus > 0) SageGreenPrimary.copy(alpha = 0.08f) else SoftCreamCanvas.copy(alpha = 0.6f),
+                        border = BorderStroke(0.8.dp, if (includePreviousSurplus && prevSurplus > 0) SageGreenPrimaryContainer else Color.LightGray.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Sisa Surplus Siklus Sebelumnya:",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = Formatters.formatRupiah(prevSurplus),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (prevSurplus > 0) SageGreenPrimary else Color.Gray
+                                )
+                            }
+
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Status Alokasi Bulan Ini:",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (includePreviousSurplus && prevSurplus > 0) SageGreenPrimary.copy(alpha = 0.15f) else Color.LightGray.copy(alpha = 0.3f)
+                                ) {
+                                    Text(
+                                        text = if (includePreviousSurplus && prevSurplus > 0) "DITAMBAHKAN KE SALDO" else "TIDAK DIGABUNG",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (includePreviousSurplus && prevSurplus > 0) SageGreenPrimary else Color.Gray,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = if (includePreviousSurplus && prevSurplus > 0) {
+                            "✓ Sisa surplus sebesar ${Formatters.formatRupiah(prevSurplus)} dari bulan lalu digabungkan sebagai modal saldo awal / buffer fund bulan ini."
+                        } else if (prevSurplus <= 0) {
+                            "ℹ️ Tidak ada surplus dari siklus sebelumnya (Rp 0 atau defisit). Saldo awal murni dari Gaji Pokok."
+                        } else {
+                            "ℹ️ Opsi mati: Saldo awal siklus ini murni dari Gaji Pokok saja (surplus bulan lalu tidak digabungkan)."
+                        },
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 14.5.sp
                     )
                 }
             }
@@ -775,6 +926,14 @@ fun FinancialCycleStatusCard(
                         if (financialSummary.additionalIncomeTotal > 0) {
                             Text(
                                 text = "+ Tambahan: ${Formatters.formatRupiah(financialSummary.additionalIncomeTotal)}",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = SageGreenPrimary
+                            )
+                        }
+                        if (financialSummary.carriedOverSurplusApplied > 0) {
+                            Text(
+                                text = "+ Surplus Lalu: ${Formatters.formatRupiah(financialSummary.carriedOverSurplusApplied)}",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = SageGreenPrimary
@@ -1342,11 +1501,31 @@ private fun AdditionalIncomeItemCard(
             }
 
             if (income.catatan.isNotBlank()) {
-                Text(
-                    text = "Catatan: ${income.catatan}",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = SoftCreamCanvas.copy(alpha = 0.8f),
+                    border = BorderStroke(0.6.dp, Color.LightGray.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = SageGreenPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = income.catatan,
+                            fontSize = 11.sp,
+                            color = SoftTextDark,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }
@@ -1621,9 +1800,10 @@ private fun ToggleAllocationDialog(
     currentPeriod: PaycheckPeriod,
     nextPeriod: PaycheckPeriod,
     onDismiss: () -> Unit,
-    onSelectAllocation: (offset: Int, label: String) -> Unit
+    onSelectAllocation: (offset: Int, label: String, catatan: String) -> Unit
 ) {
-    var selectedOption by remember { mutableIntStateOf(0) } // 0 = Current Cycle, 1 = Next Cycle, 2 = Saldo Cadangan
+    var selectedOption by remember { mutableIntStateOf(if (income.targetCycleOffset == 1) 1 else if (income.targetCycleOffset == 99) 2 else 0) } // 0 = Current Cycle, 1 = Next Cycle, 2 = Saldo Cadangan
+    var memoText by remember { mutableStateOf(income.catatan) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1636,7 +1816,10 @@ private fun ToggleAllocationDialog(
         },
         title = { Text("Alokasi Penghasilan Tambahan") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = "Pemasukan '${income.judul}' (${Formatters.formatRupiah(income.nominal)}) akan dialokasikan ke siklus mana?",
                     fontSize = 12.sp,
@@ -1741,16 +1924,48 @@ private fun ToggleAllocationDialog(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Optional Note / Memo input field
+                OutlinedTextField(
+                    value = memoText,
+                    onValueChange = { memoText = it },
+                    label = { Text("Catatan / Memo (Opsional)", fontSize = 12.sp) },
+                    placeholder = { Text("Contoh: Bonus Lembur Proyek X", fontSize = 12.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = SageGreenPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SageGreenPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_allocation_memo")
+                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    when (selectedOption) {
-                        0 -> onSelectAllocation(0, currentPeriod.label)
-                        1 -> onSelectAllocation(1, nextPeriod.label)
-                        else -> onSelectAllocation(99, "Saldo Cadangan")
+                    val label = when (selectedOption) {
+                        0 -> currentPeriod.label
+                        1 -> nextPeriod.label
+                        else -> "Saldo Cadangan"
                     }
+                    val offset = when (selectedOption) {
+                        0 -> 0
+                        1 -> 1
+                        else -> 99
+                    }
+                    onSelectAllocation(offset, label, memoText.trim())
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = SageGreenPrimary),
                 modifier = Modifier.testTag("btn_confirm_allocation")
